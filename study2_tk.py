@@ -8,7 +8,6 @@ import threading
 import random
 
 
-
 class Recognizer(threading.Thread):
     def __init__(self, stop_event, thread_id, name, n):
         threading.Thread.__init__(self)
@@ -21,8 +20,8 @@ class Recognizer(threading.Thread):
         self.step = 0.01
         self.n = n
         self.pats_status = [0 for _ in range(self.n)]
-        self.data_queue = queue.LifoQueue(maxsize=int(self.win / self.step))
-        self.pat_queues = [queue.LifoQueue(maxsize=int(self.win / self.step)) for _ in range(self.n)]
+        self.data_queue = queue.Queue(maxsize=int(self.win / self.step))
+        self.pat_queues = [queue.Queue(maxsize=int(self.win / self.step)) for _ in range(self.n)]
 
     def set_input(self, _input):
         self.input_status = _input
@@ -40,7 +39,7 @@ class Recognizer(threading.Thread):
                 pat_queue.put(state)
                 if pat_queue.full():
                     status.append(pat_queue.get())
-            print(data, status)
+            # print(data, status)
         self.quit()
 
     def quit(self):
@@ -56,25 +55,34 @@ class MainApplication(tk.Frame):
         self.w = tk.Canvas(self.root, width=self.winsize[0], height=self.winsize[1])
         self.after_handles = []
         self.pats_status = []
-        self.posters = None
+        self.posters = []
+        self.other_posters = None
         self.target_poster = None
         self.posters_selected = None
+        self.tkimages = []
         self.pats = None
         self.pats_selected = None
         self.stop_event = threading.Event()
         self.recog = None
         self.n = 0
         self.cases = [3, 9, 15]
+        self.task_cnt = 0
+        self.session_cnt = 0
 
     def set_winsize(self, win_size):
         self.winsize = win_size
+        self.w.configure(width=self.winsize[0], height=self.winsize[1])
 
-    def set_background(self, bg_tkimage):
-        self.w.create_image(0, 0, image=bg_tkimage, anchor='nw')
+    def set_background(self, bg_file):
+        image = Image.open(bg_file).resize(self.winsize, Image.ANTIALIAS)
+        self.tkbg = ImageTk.PhotoImage(image)
+        self.w.create_image(0, 0, image=self.tkbg, anchor='nw')
 
-    def set_posters(self, posters):
-        self.posters = posters[1:]
-        self.target_poster = posters[0]
+    def set_posters(self, poster_files):
+        for iamge_file in poster_files:
+            self.posters.append(Image.open(iamge_file))
+        self.other_posters = self.posters[1:]
+        self.target_poster = self.posters[0]
 
     def set_images(self, image_seq):
         self.posters_selected = image_seq
@@ -84,7 +92,7 @@ class MainApplication(tk.Frame):
 
     def state_machine(self):
         self.n = random.sample(self.cases, 1)[0]
-        self.posters_selected = random.sample(self.posters, self.n - 1) + [self.target_poster]
+        self.posters_selected = random.sample(self.other_posters, self.n - 1) + [self.target_poster]
         random.shuffle(self.posters_selected)
         self.pats_selected = self.pats[self.cases.index(self.n)]
         print(self.n, self.posters_selected, self.pats_selected)
@@ -107,19 +115,21 @@ class MainApplication(tk.Frame):
         self.recog.start()
         # blink the dot according to pats
         for i, item in enumerate(self.w.find_withtag('dot')):
-            print(self.pats_selected[i], item)
+            # print(self.pats_selected[i], i, item)
             self.root.after(self.pats_selected[i][1], self.flash, item, i, 0)
         self.recog.set_display(self.pats_status)
 
     def display(self):
-        image_size = (int(1200 / 3), int(1778 / 3))
+        image_size = (int(1200 / 5), int(1778 / 5))
         dot_size = (40, 40)
-        left_padding = 200
-        dist = 400
+        left_padding = 100
+        dist = 200
         for i, image in enumerate(self.posters_selected):
             x_center = left_padding + i * dist + (i + 1) * int(image_size[0] / 2)
             y_center = int(win_size[1] / 2)
-            self.w.create_image(x_center, y_center, image=image, anchor='center', tags=(str(i) + '_poster', 'poster'))
+            tkimage = ImageTk.PhotoImage(image.resize(image_size, Image.ANTIALIAS))
+            self.tkimages.append(tkimage)
+            self.w.create_image(x_center, y_center, image=tkimage, anchor='center', tags=(str(i) + '_poster', 'poster'))
             x_ne, y_ne = x_center + int(image_size[0] / 2), y_center - int(image_size[1] / 2)
             self.w.create_rectangle(x_ne - dot_size[0], y_ne, x_ne, y_ne + dot_size[1], fill="red",
                                     tags=(str(i) + '_dot', 'dot'), outline='')
@@ -131,25 +141,26 @@ class MainApplication(tk.Frame):
         #     self.root.after_cancel(self.after_handle)
         stipples = ['@transparent.xbm', '']
         self.w.itemconfigure(item, fill='red', stipple=stipples[idx])
-        self.root.after(self.pats_selected[i][0], self.flash, item, i, (idx + 1) % 2)
+        # print(self.pats_selected, i)
+        self.after_handles.append(self.root.after(self.pats_selected[i][0], self.flash, item, i, (idx + 1) % 2))
         self.pats_status[i] = idx
-        # return after_handle, idx
 
     def clean(self):
         # terminate the current thread
         self.stop_event.set()
         if self.recog:
             self.recog.join()
-        # cancel the on-going after functions
-        # if len(self.after_handles) > 0:
-        #     for handle in self.after_handles:
-        #         self.root.after_cancel(handle)
+        # cancel all after functions started in the current selection task
+        if len(self.after_handles) > 0:
+            for handle in self.after_handles:
+                self.root.after_cancel(handle)
         # delete all poster and dot items on the canvas
         items = self.w.find_withtag('poster') + self.w.find_withtag('dot')
         if len(items) > 0:
             # delete can only take one item at a time
             for item in items:
                 self.w.delete(item)
+        self.tkimages = []
 
     def space_pressed(self, event):
         if self.recog:
@@ -186,36 +197,20 @@ def pats_gen(periods_init, delays_init):
                 pats[n_pats.index(n)].append([p, d])
     return pats
 
-
-def convert_tkimage(filename, image_size):
-    if type(filename) is str:
-        image = Image.open(filename).resize(image_size, Image.ANTIALIAS)
-        tkimage = ImageTk.PhotoImage(image)
-        return tkimage
-    if len(filename) >= 1:
-        tkimage = list()
-        for image_file in filename:
-            print(image_file)
-            image = Image.open(image_file).resize(image_size, Image.ANTIALIAS)
-            tkimage.append(ImageTk.PhotoImage(image))
-        return tkimage
-    else:
-        return []
-
+bg_file = "./photo/bg.jpg"
 
 if __name__ == '__main__':
     # create window with background picture
     root = tk.Tk()
-    win_size = (1920, 1080)
-
+    # win_size = (1920, 1080)
+    win_size = (3840, 2160)
+    print(win_size)
     app = MainApplication(root)
-    app.set_winsize(win_size)
-    bg_tkimage = convert_tkimage("./photo/bg.jpg", app.winsize)
-    app.set_background(bg_tkimage)
+    # app.set_winsize(win_size)
+    app.set_background(bg_file)
 
     poster_files = ["./photo/" + str(i) + ".jpeg" for i in range(15)]
-    posters_tk = convert_tkimage(poster_files, (int(1200 / 3), int(1778 / 3)))
-    app.set_posters(posters_tk)
+    app.set_posters(poster_files)
     pats = pats_gen(periods_init, delays_init)
     app.set_pats(pats)
 
