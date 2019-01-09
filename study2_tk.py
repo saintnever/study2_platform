@@ -16,6 +16,8 @@ class MainApplication(tk.Frame):
         self.height = self.winfo_screenheight()
         self.winsize = (self.width, self.height)
         self.after_handles = []
+        self.rest_handles = []
+        self.rest_text = None
         self.pats_status = []
         self.posters = []
         self.other_posters = None
@@ -27,11 +29,15 @@ class MainApplication(tk.Frame):
         self.pats = None
         self.pats_selected = None
         self.stop_event = threading.Event()
-        self.recog = None
         self.n = 0
-        self.cases = [3, 9, 10, 15]
+        self.cases = [3, 10]
+        self.recog_typelist = ['Corr', 'Baye', 'ML']
+        self.recog = None
+        self.recog_type = None
         self.task_cnt = 0
         self.session_cnt = 0
+        self.rest_cnt = 20
+        self.seq = []
         # create canvas
         self.w = tk.Canvas(self.root, width=self.winsize[0], height=self.winsize[1])
         self.w.pack()
@@ -73,7 +79,15 @@ class MainApplication(tk.Frame):
         self.pats = pat_set
 
     def state_machine(self):
-        self.n = random.sample(self.cases, 1)[0]
+        # init the task sequence for current session
+        if self.task_cnt == 0:
+            for case in self.cases:
+                for rcog in self.recog_typelist:
+                    self.seq.append([case, rcog])
+            random.shuffle(self.seq)
+        # assign n and recognizer type for current task
+        self.n = self.seq[self.task_cnt][0]
+        self.recog_type = self.seq[self.task_cnt][1]
         self.posters_selected = random.sample(self.other_posters, self.n - 1) + [self.target_poster]
         random.shuffle(self.posters_selected)
         for pat in self.pats:
@@ -85,21 +99,32 @@ class MainApplication(tk.Frame):
         pass
 
     def selection_task(self, event):
-        self.state_machine()
-        self.pats_status = [0] * self.n
-        # clean from previous task
-        self.clean()
-        # draw the posters and dots
-        self.display()
-        # start new recognizer thread for the new task
-        self.stop_event.clear()
-        self.recog = Recognizer(self.stop_event, 1, 'test', self.n)
-        self.recog.start()
-        # blink the dot according to pats
-        for i, item in enumerate(self.w.find_withtag('dot')):
-            # print(self.pats_selected[i], i, item)
-            self.root.after(self.pats_selected[i][1], self.flash, item, i, 0)
-        self.recog.set_display(self.pats_status)
+        if self.task_cnt == len(self.cases) * len(self.recog_typelist):
+            # clean from previous task
+            self.clean_task()
+            self.clean_session()
+            self.rest_text = self.w.create_text(int(self.width / 2), int(self.height / 2), anchor='center', fill = 'red',
+                                      font=("New Roman", 40),
+                                      text='Remaining rest time {}s'.format(self.rest_cnt))
+            self.rest_handles.append(self.root.after(1, self.rest))
+        else:
+            # clean from previous task
+            self.clean_task()
+            self.state_machine()
+            # print(self.n, self.recog_type)
+            self.pats_status = [0] * self.n
+            # draw the posters and dots
+            self.display()
+            # start new recognizer thread for the new task
+            self.stop_event.clear()
+            self.recog = Recognizer(self.stop_event, 1, self.recog_type, self.n)
+            self.recog.start()
+            # blink the dot according to pats
+            for i, item in enumerate(self.w.find_withtag('dot')):
+                # print(self.pats_selected[i], i, item)
+                self.after_handles.append(self.root.after(self.pats_selected[i][1], self.flash, item, i, 0))
+            self.recog.set_display(self.pats_status)
+            self.task_cnt += 1
 
     def display(self):
         if self.n == 3:
@@ -114,10 +139,10 @@ class MainApplication(tk.Frame):
     def draw(self, n_row, n_col, padding):
         if n_row <= 2:
             wpadding = padding
-            lpadding = rpadding = wpadding*2
+            lpadding = rpadding = wpadding * 2
             image_width = int((self.width - lpadding - rpadding - wpadding * (n_col - 1)) / n_col)
             image_height = int(image_width * self.poster_aratio)
-            tpadding = bpadding = hpadding = int((self.height - n_row*image_height)/(n_row+1))
+            tpadding = bpadding = hpadding = int((self.height - n_row * image_height) / (n_row + 1))
         else:
             hpadding = padding
             bpadding = hpadding
@@ -146,10 +171,14 @@ class MainApplication(tk.Frame):
         stipples = ['@transparent.xbm', '']
         self.w.itemconfigure(item, fill='red', stipple=stipples[idx])
         # print(self.pats_selected, i)
-        self.after_handles.append(self.root.after(self.pats_selected[i][0], self.flash, item, i, (idx + 1) % 2))
-        self.pats_status[i] = idx
+        try:
+            self.after_handles.append(self.root.after(self.pats_selected[i][0], self.flash, item, i, (idx + 1) % 2))
+            self.pats_status[i] = idx
+        except IndexError:
+            print('IndexError: i is {}, pat length is {}, pat is {}'.format(i, len(self.pats_selected),
+                                                                            self.pats_selected))
 
-    def clean(self):
+    def clean_task(self):
         # terminate the current thread
         self.stop_event.set()
         if self.recog:
@@ -165,6 +194,24 @@ class MainApplication(tk.Frame):
             for item in items:
                 self.w.delete(item)
         self.tkimages = []
+        if self.rest_text is not None:
+            self.w.delete(self.rest_text)
+
+    def clean_session(self):
+        self.seq = []
+        self.task_cnt = 0
+        self.session_cnt += 1
+        self.rest_cnt = 20
+
+    def rest(self):
+        self.rest_cnt -= 1
+        self.w.itemconfigure(self.rest_text, text='Remaining rest time {}s'.format(self.rest_cnt))
+        if self.rest_cnt == 0:
+            self.w.itemconfigure(self.rest_text, text='Press RETURN to start next session')
+            for handle in self.rest_handles:
+                self.root.cancel_after(handle)
+        else:
+            self.rest_handles.append(self.root.after(1000, self.rest))
 
     def space_pressed(self, event):
         if self.recog:
@@ -179,7 +226,8 @@ class MainApplication(tk.Frame):
 
     def _on_closing(self):
         print('CLOSING THE WINDOW...')
-        self.clean()
+        self.clean_task()
+        self.clean_session()
         self.root.destroy()
 
 
@@ -190,7 +238,7 @@ periods_init = [[300, 450, 650], [300, 350, 400, 500, 600, 700], [300, 350, 400,
                 [300, 350, 350, 400, 400, 450, 450, 500, 500, 550, 550, 600, 600, 650, 650, 650, 700, 700]]
 
 delays_init = [[0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 396, 0, 433],
-               [0, 0, 0, 0, 0, 0, 0, 0, 0, 467],  [0, 0, 0, 200, 0, 225, 0, 320, 0, 396, 0, 467],
+               [0, 0, 0, 0, 0, 0, 0, 0, 0, 467], [0, 0, 0, 200, 0, 225, 0, 320, 0, 396, 0, 467],
                [0, 0, 175, 0, 200, 0, 225, 0, 320, 0, 362, 0, 396, 0, 433],
                [0, 0, 175, 0, 200, 0, 225, 0, 320, 0, 362, 0, 396, 0, 198, 396, 0, 433]]
 
