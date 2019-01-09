@@ -7,19 +7,6 @@ import queue
 import threading
 import random
 
-def convert_tkimage(filename, image_size):
-    if type(filename) is str:
-        image = Image.open(filename).resize(image_size, Image.ANTIALIAS)
-        tkimage = ImageTk.PhotoImage(image)
-        return tkimage
-    if len(filename) >= 1:
-        tkimage = list()
-        for image_file in filename:
-            image = Image.open(image_file).resize(image_size, Image.ANTIALIAS)
-            tkimage.append(ImageTk.PhotoImage(image))
-        return tkimage
-    else:
-        return []
 
 
 class Recognizer(threading.Thread):
@@ -77,7 +64,7 @@ class MainApplication(tk.Frame):
         self.stop_event = threading.Event()
         self.recog = None
         self.n = 0
-        self.cases = [3, 2, 4]
+        self.cases = [3, 9, 15]
 
     def set_winsize(self, win_size):
         self.winsize = win_size
@@ -97,9 +84,9 @@ class MainApplication(tk.Frame):
 
     def state_machine(self):
         self.n = random.sample(self.cases, 1)[0]
-        self.posters_selected = random.sample(self.posters, self.n - 1)+[self.target_poster]
+        self.posters_selected = random.sample(self.posters, self.n - 1) + [self.target_poster]
         random.shuffle(self.posters_selected)
-        self.pats_selected = self.pats[:self.n]
+        self.pats_selected = self.pats[self.cases.index(self.n)]
         print(self.n, self.posters_selected, self.pats_selected)
 
     def id_input(self):
@@ -109,7 +96,7 @@ class MainApplication(tk.Frame):
         self.state_machine()
         assert len(self.posters_selected) == len(self.pats_selected)
         self.n = len(self.posters_selected)
-        self.pats_status = [0]*self.n
+        self.pats_status = [0] * self.n
         # clean from previous task
         self.clean()
         # draw the posters and dots
@@ -120,7 +107,7 @@ class MainApplication(tk.Frame):
         self.recog.start()
         # blink the dot according to pats
         for i, item in enumerate(self.w.find_withtag('dot')):
-            print(self.pats[i], item)
+            print(self.pats_selected[i], item)
             self.root.after(self.pats_selected[i][1], self.flash, item, i, 0)
         self.recog.set_display(self.pats_status)
 
@@ -178,26 +165,63 @@ class MainApplication(tk.Frame):
         self.root.destroy()
 
 
+periods_init = [[300, 450, 650], [300, 350, 400, 500, 600, 700], [300, 350, 400, 450, 500, 600, 600, 700, 700],
+                [300, 350, 400, 400, 450, 450, 500, 500, 600, 600, 700, 700],
+                [300, 350, 350, 400, 400, 450, 450, 500, 500, 550, 550, 600, 600, 700, 700],
+                [300, 350, 350, 400, 400, 450, 450, 500, 500, 550, 550, 600, 600, 650, 650, 650, 700, 700]]
+
+delays_init = [[0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 396, 0, 433],
+               [0, 0, 0, 200, 0, 225, 0, 320, 0, 396, 0, 433],
+               [0, 0, 175, 0, 200, 0, 225, 0, 320, 0, 362, 0, 396, 0, 433],
+               [0, 0, 175, 0, 200, 0, 225, 0, 320, 0, 362, 0, 396, 0, 198, 396, 0, 433]]
+
+
+def pats_gen(periods_init, delays_init):
+    n_pats = [3, 9, 15]
+    pats = [[] for _ in n_pats]
+    for period, delay in zip(periods_init, delays_init):
+        n = len(period)
+        if n in n_pats:
+            for p, d in zip(period, delay):
+                pats[n_pats.index(n)].append([p, d])
+    return pats
+
+
+def convert_tkimage(filename, image_size):
+    if type(filename) is str:
+        image = Image.open(filename).resize(image_size, Image.ANTIALIAS)
+        tkimage = ImageTk.PhotoImage(image)
+        return tkimage
+    if len(filename) >= 1:
+        tkimage = list()
+        for image_file in filename:
+            print(image_file)
+            image = Image.open(image_file).resize(image_size, Image.ANTIALIAS)
+            tkimage.append(ImageTk.PhotoImage(image))
+        return tkimage
+    else:
+        return []
+
+
 if __name__ == '__main__':
     # create window with background picture
     root = tk.Tk()
     win_size = (1920, 1080)
-
 
     app = MainApplication(root)
     app.set_winsize(win_size)
     bg_tkimage = convert_tkimage("./photo/bg.jpg", app.winsize)
     app.set_background(bg_tkimage)
 
-    n = 3
-    pats = [[700, 0], [700, 150], [700, 300]]
-    poster_files = ["./photo/" + str(i) + ".jpeg" for i in range(7)]
+    poster_files = ["./photo/" + str(i) + ".jpeg" for i in range(15)]
     posters_tk = convert_tkimage(poster_files, (int(1200 / 3), int(1778 / 3)))
     app.set_posters(posters_tk)
+    pats = pats_gen(periods_init, delays_init)
     app.set_pats(pats)
+
+    # start new selection task when hit Return
     app.w.focus_set()
     app.w.bind('<Return>', app.selection_task)
-
     # collect space key status
     app.w.bind('<KeyPress-space>', app.space_pressed)
     app.w.bind('<KeyRelease-space>', app.space_released)
