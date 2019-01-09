@@ -30,7 +30,7 @@ class MainApplication(tk.Frame):
         self.pats_selected = None
         self.stop_event = threading.Event()
         self.n = 0
-        self.cases = [3, 10]
+        self.cases = [3]
         self.recog_typelist = ['Corr', 'Baye', 'ML']
         self.recog = None
         self.recog_type = None
@@ -198,19 +198,20 @@ class MainApplication(tk.Frame):
             self.w.delete(self.rest_text)
 
     def clean_session(self):
+        if len(self.rest_handles) > 0:
+            for handle in self.rest_handles:
+                self.root.after_cancel(handle)
         self.seq = []
         self.task_cnt = 0
         self.session_cnt += 1
         self.rest_cnt = 20
 
     def rest(self):
-        self.rest_cnt -= 1
         self.w.itemconfigure(self.rest_text, text='Remaining rest time {}s'.format(self.rest_cnt))
         if self.rest_cnt == 0:
             self.w.itemconfigure(self.rest_text, text='Press RETURN to start next session')
-            for handle in self.rest_handles:
-                self.root.cancel_after(handle)
         else:
+            self.rest_cnt -= 1
             self.rest_handles.append(self.root.after(1000, self.rest))
 
     def space_pressed(self, event):
