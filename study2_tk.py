@@ -3,56 +3,16 @@
 
 import tkinter as tk
 from PIL import Image, ImageTk
-import queue
+from recognizer import Recognizer
 import threading
 import random
 
 
-class Recognizer(threading.Thread):
-    def __init__(self, stop_event, thread_id, name, n):
-        threading.Thread.__init__(self)
-        self.thread_id = thread_id
-        self.name = name
-        self.stopped = stop_event
-        self.input_status = 0
-        self.inteval = 0.01  # in second
-        self.win = 2
-        self.step = 0.01
-        self.n = n
-        self.pats_status = [0 for _ in range(self.n)]
-        self.data_queue = queue.Queue(maxsize=int(self.win / self.step))
-        self.pat_queues = [queue.Queue(maxsize=int(self.win / self.step)) for _ in range(self.n)]
-
-    def set_input(self, _input):
-        self.input_status = _input
-
-    def set_display(self, display):
-        self.pats_status = display
-
-    def run(self):
-        while not self.stopped.wait(self.inteval):
-            self.data_queue.put(self.input_status)
-            data, status = -1, []
-            if self.data_queue.full():
-                data = self.data_queue.get()
-            for state, pat_queue in zip(self.pats_status, self.pat_queues):
-                pat_queue.put(state)
-                if pat_queue.full():
-                    status.append(pat_queue.get())
-            # print(data, status)
-        self.quit()
-
-    def quit(self):
-        # after the thread is joined, all data will be self destroyed
-        pass
-
-
 class MainApplication(tk.Frame):
-    def __init__(self, parent, *args, **kwargs):
+    def __init__(self, parent, winsize, *args, **kwargs):
         tk.Frame.__init__(self, parent, *args, **kwargs)
         self.root = parent
-        self.winsize = (1920, 1080)
-        self.w = tk.Canvas(self.root, width=self.winsize[0], height=self.winsize[1])
+        self.winsize = winsize
         self.after_handles = []
         self.pats_status = []
         self.posters = []
@@ -60,6 +20,7 @@ class MainApplication(tk.Frame):
         self.target_poster = None
         self.posters_selected = None
         self.tkimages = []
+        self.poster_size = None
         self.pats = None
         self.pats_selected = None
         self.stop_event = threading.Event()
@@ -68,10 +29,23 @@ class MainApplication(tk.Frame):
         self.cases = [3, 9, 15]
         self.task_cnt = 0
         self.session_cnt = 0
+        # create canvas
+        self.w = tk.Canvas(self.root, width=self.winsize[0], height=self.winsize[1])
+        self.w.pack()
+        # start new selection task when hit Return
+        self.w.focus_set()
+        self.w.bind('<Return>', self.selection_task)
+        # collect space key status
+        self.w.bind('<KeyPress-space>', self.space_pressed)
+        self.w.bind('<KeyRelease-space>', self.space_released)
+        # clean when closing the window
+        self.w.bind('<Escape>', self.on_closing)
+        self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
     def set_winsize(self, win_size):
         self.winsize = win_size
         self.w.configure(width=self.winsize[0], height=self.winsize[1])
+        self.w.pack()
 
     def set_background(self, bg_file):
         image = Image.open(bg_file).resize(self.winsize, Image.ANTIALIAS)
@@ -83,6 +57,7 @@ class MainApplication(tk.Frame):
             self.posters.append(Image.open(iamge_file))
         self.other_posters = self.posters[1:]
         self.target_poster = self.posters[0]
+        self.poster_size = (self.target_poster.width, self.target_poster.height)
 
     def set_images(self, image_seq):
         self.posters_selected = image_seq
@@ -95,15 +70,14 @@ class MainApplication(tk.Frame):
         self.posters_selected = random.sample(self.other_posters, self.n - 1) + [self.target_poster]
         random.shuffle(self.posters_selected)
         self.pats_selected = self.pats[self.cases.index(self.n)]
-        print(self.n, self.posters_selected, self.pats_selected)
+        assert len(self.posters_selected) == len(self.pats_selected)
+        # print(self.n, self.posters_selected, self.pats_selected)
 
     def id_input(self):
         pass
 
     def selection_task(self, event):
         self.state_machine()
-        assert len(self.posters_selected) == len(self.pats_selected)
-        self.n = len(self.posters_selected)
         self.pats_status = [0] * self.n
         # clean from previous task
         self.clean()
@@ -120,13 +94,15 @@ class MainApplication(tk.Frame):
         self.recog.set_display(self.pats_status)
 
     def display(self):
-        image_size = (int(1200 / 5), int(1778 / 5))
+        image_size = (int(self.poster_size[0] / 3), int(self.poster_size[1] / 3))
         dot_size = (40, 40)
         left_padding = 100
         dist = 200
         for i, image in enumerate(self.posters_selected):
             x_center = left_padding + i * dist + (i + 1) * int(image_size[0] / 2)
-            y_center = int(win_size[1] / 2)
+            y_center = int(self.winsize[1] / 2)
+            # y_center = self.winsize[1]
+            print(x_center, y_center)
             tkimage = ImageTk.PhotoImage(image.resize(image_size, Image.ANTIALIAS))
             self.tkimages.append(tkimage)
             self.w.create_image(x_center, y_center, image=tkimage, anchor='center', tags=(str(i) + '_poster', 'poster'))
@@ -170,7 +146,10 @@ class MainApplication(tk.Frame):
         if self.recog:
             self.recog.set_input(0)
 
-    def on_closing(self):
+    def on_closing(self, event):
+        self._on_closing()
+
+    def _on_closing(self):
         print('CLOSING THE WINDOW...')
         self.clean()
         self.root.destroy()
@@ -197,32 +176,23 @@ def pats_gen(periods_init, delays_init):
                 pats[n_pats.index(n)].append([p, d])
     return pats
 
-bg_file = "./photo/bg.jpg"
 
 if __name__ == '__main__':
     # create window with background picture
     root = tk.Tk()
+    root.attributes("-fullscreen", False)
     # win_size = (1920, 1080)
-    win_size = (3840, 2160)
+    win_size = (root.winfo_screenwidth(), root.winfo_screenheight())
     print(win_size)
-    app = MainApplication(root)
-    # app.set_winsize(win_size)
+    app = MainApplication(root, win_size)
+    bg_file = "./photo/bg.jpg"
     app.set_background(bg_file)
 
+    # pass in poster filenames and blinking patterns
     poster_files = ["./photo/" + str(i) + ".jpeg" for i in range(15)]
     app.set_posters(poster_files)
     pats = pats_gen(periods_init, delays_init)
     app.set_pats(pats)
 
-    # start new selection task when hit Return
-    app.w.focus_set()
-    app.w.bind('<Return>', app.selection_task)
-    # collect space key status
-    app.w.bind('<KeyPress-space>', app.space_pressed)
-    app.w.bind('<KeyRelease-space>', app.space_released)
-    # app.task(posters_tk, range(n))
-    app.root.protocol("WM_DELETE_WINDOW", app.on_closing)
-
-    app.w.pack()
-
+    # start mainloop
     root.mainloop()
