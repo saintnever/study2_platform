@@ -20,7 +20,6 @@ class MainApplication(tk.Frame):
         self.rest_handles = []
         self.check_handles = []
         self.rest_text = None
-        self.pats_status = []
         self.posters = []
         self.other_posters = None
         self.target_poster = None
@@ -35,7 +34,7 @@ class MainApplication(tk.Frame):
         self.select_event = threading.Event()
         self.n = 0
         self.cases = [3]
-        self.recog_typelist = ['Corr', 'Baye', 'ML']
+        self.recog_typelist = ['corr', 'baye', 'ml']
         self.recog = None
         self.recog_type = None
         self.task_cnt = 0
@@ -115,19 +114,17 @@ class MainApplication(tk.Frame):
             # clean from previous task
             self.clean_task()
             self.state_machine()
-            # print(self.n, self.recog_type)
             self.pats_status = [0] * self.n
-            # draw the posters and dots
-            self.display()
             # start new recognizer thread for the new task
             self.stop_event.clear()
             self.recog = Recognizer(self.stop_event, self.select_event, 1, self.recog_type, self.n)
             self.recog.start()
+            # draw the posters and dots
+            self.display()
             # blink the dot according to pats
             for i, item in enumerate(self.w.find_withtag('dot')):
                 # print(self.pats_selected[i], i, item)
                 self.after_handles.append(self.root.after(self.pats_selected[i][1], self.flash, item, i, 0))
-            self.recog.set_display(self.pats_status)
             self.task_cnt += 1
             self.check_handles.append(self.root.after(1, self.target_check))
 
@@ -188,8 +185,11 @@ class MainApplication(tk.Frame):
     def target_check(self):
         if self.select_event.is_set():
             self.selected_interface()
+            self.stop_event.set()
             return
-        self.check_handles.append(self.root.after(1, self.target_check))
+        # update the pattern display status
+        self.recog.set_display(self.pats_status)
+        self.check_handles.append(self.root.after(5, self.target_check))
 
     def flash(self, item, i, idx=0):
         # if a target is selected, stop blinking
@@ -226,9 +226,9 @@ class MainApplication(tk.Frame):
             # delete can only take one item at a time
             for item in items:
                 self.w.delete(item)
-        self.tkimages = []
         if self.rest_text is not None:
             self.w.delete(self.rest_text)
+        self.tkimages = []
 
     def clean_session(self):
         if len(self.rest_handles) > 0:
