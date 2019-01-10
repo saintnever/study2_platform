@@ -6,6 +6,7 @@ from PIL import Image, ImageTk
 from recognizer import Recognizer
 import threading
 import random
+import queue
 
 
 class MainApplication(tk.Frame):
@@ -17,6 +18,7 @@ class MainApplication(tk.Frame):
         self.winsize = (self.width, self.height)
         self.after_handles = []
         self.rest_handles = []
+        self.check_handles = []
         self.rest_text = None
         self.pats_status = []
         self.posters = []
@@ -29,6 +31,7 @@ class MainApplication(tk.Frame):
         self.pats = None
         self.pats_selected = None
         self.stop_event = threading.Event()
+        self.select_event = threading.Event()
         self.n = 0
         self.cases = [3]
         self.recog_typelist = ['Corr', 'Baye', 'ML']
@@ -50,6 +53,7 @@ class MainApplication(tk.Frame):
         # clean when closing the window
         self.w.bind('<Escape>', self.on_closing)
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+        self.qselect_flag = queue.Queue(maxsize=100)
 
     def set_winsize(self, win_size):
         self.winsize = win_size
@@ -117,7 +121,7 @@ class MainApplication(tk.Frame):
             self.display()
             # start new recognizer thread for the new task
             self.stop_event.clear()
-            self.recog = Recognizer(self.stop_event, 1, self.recog_type, self.n)
+            self.recog = Recognizer(self.stop_event, self.select_event, 1, self.recog_type, self.n)
             self.recog.start()
             # blink the dot according to pats
             for i, item in enumerate(self.w.find_withtag('dot')):
@@ -125,6 +129,7 @@ class MainApplication(tk.Frame):
                 self.after_handles.append(self.root.after(self.pats_selected[i][1], self.flash, item, i, 0))
             self.recog.set_display(self.pats_status)
             self.task_cnt += 1
+            self.check_handles.append(self.root.after(1, self.target_check))
 
     def display(self):
         if self.n == 3:
@@ -167,10 +172,23 @@ class MainApplication(tk.Frame):
             self.w.create_rectangle(x_ne - dot_size[0], y_ne, x_ne, y_ne + dot_size[1], fill="red",
                                     tags=(str(i) + '_dot', 'dot'), outline='')
 
+    def selected_interface(self):
+        print('selected')
+        pass
+
+    def target_check(self):
+        print(self.recog.get_target())
+        if self.select_event.is_set():
+            self.selected_interface()
+        self.check_handles.append(self.root.after(1, self.target_check))
+
     def flash(self, item, i, idx=0):
         stipples = ['@transparent.xbm', '']
+        # if a target is selected, stop blinking
+        if self.select_event.is_set():
+            self.w.itemconfigure(item, fill='red', stipple=stipples[0])
+            return
         self.w.itemconfigure(item, fill='red', stipple=stipples[idx])
-        # print(self.pats_selected, i)
         try:
             self.after_handles.append(self.root.after(self.pats_selected[i][0], self.flash, item, i, (idx + 1) % 2))
             self.pats_status[i] = idx
@@ -179,13 +197,17 @@ class MainApplication(tk.Frame):
                                                                             self.pats_selected))
 
     def clean_task(self):
-        # terminate the current thread
+        # terminate the current thread and clear the selected flag
         self.stop_event.set()
+        self.select_event.clear()
         if self.recog:
             self.recog.join()
         # cancel all after functions started in the current selection task
         if len(self.after_handles) > 0:
             for handle in self.after_handles:
+                self.root.after_cancel(handle)
+        if len(self.check_handles) > 0:
+            for handle in self.check_handles:
                 self.root.after_cancel(handle)
         # delete all poster and dot items on the canvas
         items = self.w.find_withtag('poster') + self.w.find_withtag('dot')
@@ -242,6 +264,8 @@ delays_init = [[0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 396, 0, 433],
                [0, 0, 0, 0, 0, 0, 0, 0, 0, 467], [0, 0, 0, 200, 0, 225, 0, 320, 0, 396, 0, 467],
                [0, 0, 175, 0, 200, 0, 225, 0, 320, 0, 362, 0, 396, 0, 433],
                [0, 0, 175, 0, 200, 0, 225, 0, 320, 0, 362, 0, 396, 0, 198, 396, 0, 433]]
+
+select_flag = -1
 
 
 def pats_gen(periods_init, delays_init):
