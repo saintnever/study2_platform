@@ -35,9 +35,9 @@ class MainApplication(tk.Frame):
         self.select_event = threading.Event()
         self.n = 0
         self.pats_status = None
-        self.cases = [3]
+        self.cases = [3, 10, 15]
         # self.recog_typelist = ['corr', 'baye', 'ml']
-        self.recog_typelist = ['corr', 'corr', 'corr']
+        self.recog_typelist = ['baye']
         self.recog = None
         self.recog_type = None
         self.task_cnt = 0
@@ -121,7 +121,7 @@ class MainApplication(tk.Frame):
             # start new recognizer thread for the new task
             self.stop_event.clear()
             self.recog = Recognizer(self.stop_event, self.select_event, self.cases.index(self.n), self.recog_type,
-                                    self.n)
+                                    self.n, self.pats_selected)
             self.recog.start()
             # draw the posters and dots
             self.display()
@@ -302,6 +302,7 @@ if __name__ == '__main__':
     root.attributes("-fullscreen", False)
     # win_size = (1920, 1080)
     app = MainApplication(root)
+    app.set_winsize((1920, 1080))
     bg_file = "./photo/bg.jpg"
     app.set_background(bg_file)
 
