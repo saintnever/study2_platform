@@ -129,6 +129,7 @@ class MainApplication(tk.Frame):
             for i, item in enumerate(self.w.find_withtag('dot')):
                 # print(self.pats_selected[i], i, item)
                 self.after_handles.append(self.root.after(self.pats_selected[i][1], self.flash, item, i, 0))
+            self.recog.set_display(self.pats_status)   # this is effectively a global variable, so single pass is enough
             self.task_cnt += 1
             self.check_handles.append(self.root.after(1, self.target_check))
 
@@ -192,7 +193,6 @@ class MainApplication(tk.Frame):
             self.selected_interface()
             return
         # update the pattern display status
-        self.recog.set_display(self.pats_status)
         self.check_handles.append(self.root.after(5, self.target_check))
 
     def flash(self, item, i, idx=0):

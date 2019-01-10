@@ -2,7 +2,7 @@ import queue
 import threading
 import random
 import numpy as np
-
+import pandas as pd
 
 class Recognizer(threading.Thread):
     def __init__(self, stop_event, select_event, thread_id, algo, n):
@@ -26,6 +26,14 @@ class Recognizer(threading.Thread):
         self.pats_status = [0 for _ in range(self.n)]
         self.data_queue = queue.Queue(maxsize=int(self.win / self.step))
         self.pat_queues = [queue.Queue(maxsize=int(self.win / self.step)) for _ in range(self.n)]
+        self.init_algo()
+        self.model_freq = None
+        self.model_delay = None
+
+    def init_algo(self):
+        if self.algo == 'baye':
+            self.model_freq = pd.read_csv('./model/freq_allstudy1.csv')
+            self.model_delay = pd.read_csv('./model/delay_allstudy1.csv')
 
     def set_input(self, _input):
         self.input_status = _input
@@ -52,33 +60,61 @@ class Recognizer(threading.Thread):
         self.quit()
 
     def start_recog(self):
+        if self.algo == 'corr':
+            self.recog_corr()
+        elif self.algo == 'baye':
+            self.recog_baye()
+        elif self.algo == 'ml':
+            self.recog_ML()
+        else:
+            print('Recognizer does not exist!')
+
+    def recog_corr(self):
+        # if np.sum(signal) == 0 and np.sum(signal) == len(signal) and np.sum(pat) == 0 and np.sum(pat) == len(pat):
+        #     return 0
         signal = list(self.data_queue.queue)
-        ths = list()
+        probs = list()
         for i, q in enumerate(self.pat_queues):
             pat = list(q.queue)
-            if self.algo == 'corr':
-                ths.append(self.recog_corr(signal, pat))
-            elif self.algo == 'baye':
-                ths.append(self.recog_baye(signal, pat))
-            elif self.algo == 'ml':
-                ths.append(self.recog_ML(signal, pat))
-            else:
-                print('Recognizer does not exist!')
+            probs.append(abs(np.corrcoef(signal, pat)[0][1]))
+
         # select target
-        if np.max(ths) > self.TH:
+        if np.max(probs) > self.TH:
             self.select.set()
-            self.target = np.argmax(ths)
+            self.target = np.argmax(probs)
 
-    def recog_corr(self, signal, pat):
-        # if np.sum(signal) == 0 and np.sum(signal) == len(signal) and np.sum(pat) == 0 and np.sum(pat) == len(pat):
-        #     return
-        corr = abs(np.corrcoef(signal, pat)[0][1])
-        return corr
+    def recog_baye(self):
+        # calculate the input period and delay
+        signal = self.input_baye()
+        probs = list()
+        # select target
+        if np.max(probs) > self.TH:
+            self.select.set()
+            self.target = np.argmax(probs)
 
-    def recog_baye(self, signal, pat):
+    def input_baye(self):
+        signal = list(self.data_queue.queue)
+        m_periods = list()
+        for i, state in enumerate(signal[1:]):
+            if state != signal[i-1]:
+                m_periods.append(i)
+        # can estimate freq now
+
+        # calcualte delay
+        m_d = [[] for _ in self.pat_queues]
+        for i, q in enumerate(self.pat_queues):
+            pat = list(q.queue)
+            for iperiod in m_periods:
+                m_delay = self.measure_delay(iperiod, pat)
+                m_d[i].append(m_delay)
+            # estimate delay
         return 0
 
-    def recog_ML(self, signal, pat):
+    def measure_delay(self, iperiod, pat):
+        m_delay = 0
+        return m_delay
+
+    def recog_ML(self):
         return 0
 
     def quit(self):
