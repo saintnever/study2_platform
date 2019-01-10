@@ -13,14 +13,19 @@ class Recognizer(threading.Thread):
         self.select = select_event
         self.target = -1
         self.input_status = 0
-        self.inteval = 0.01  # in second
-        self.win = 2
-        self.step = 0.01
         self.n = n
+        self.THs = {'corr3': 0.5, 'corr10': 0.4, 'corr15': 0.4, 'baye3': 0.7, 'baye10': 0.4, 'baye15': 0.3}
+        self.wins = {'corr3': 3, 'corr10': 5, 'corr15': 5, 'baye3': 2, 'baye10': 5, 'baye15': 6}
+        self.win = 2
+        self.TH = 0.5
+        if self.algo+str(self.n) in self.THs.keys():
+            self.win = self.wins.get(self.algo + str(self.n))
+            self.TH = self.THs.get(self.algo + str(self.n))
+        self.inteval = 0.01  # in second
+        self.step = 0.01
         self.pats_status = [0 for _ in range(self.n)]
         self.data_queue = queue.Queue(maxsize=int(self.win / self.step))
         self.pat_queues = [queue.Queue(maxsize=int(self.win / self.step)) for _ in range(self.n)]
-        # self.qflag = qflag
 
     def set_input(self, _input):
         self.input_status = _input
@@ -32,12 +37,14 @@ class Recognizer(threading.Thread):
         return self.target
 
     def run(self):
+        data, status = -1, []
         while not self.stopped.wait(self.inteval):
+            # maintain input queue and start recog for current win
             self.data_queue.put(self.input_status)
-            data, status = -1, []
             if self.data_queue.full():
                 data = self.data_queue.get()
                 self.start_recog()
+            # maintain display status
             for state, pat_queue in zip(self.pats_status, self.pat_queues):
                 pat_queue.put(state)
                 if pat_queue.full():
@@ -56,11 +63,15 @@ class Recognizer(threading.Thread):
                 self.recog_ML(signal, pat, i)
             else:
                 print('Recognizer does not exist!')
+            if self.select.is_set():
+                break
 
     def recog_corr(self, signal, pat, i):
         # if np.sum(signal) == 0 and np.sum(signal) == len(signal) and np.sum(pat) == 0 and np.sum(pat) == len(pat):
         #     return
-        if abs(np.corrcoef(signal, pat)[0][1]) > 0.6:
+        corr = abs(np.corrcoef(signal, pat)[0][1])
+        print(i, corr)
+        if corr > self.TH:
             self.select.set()
             self.target = i
 

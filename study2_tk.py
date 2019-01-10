@@ -25,6 +25,7 @@ class MainApplication(tk.Frame):
         self.target_poster = None
         self.posters_selected = None
         self.tkimages = []
+        self.tkbg = None
         self.poster_size = None
         self.poster_aratio = None
         self.image_size = None
@@ -33,8 +34,10 @@ class MainApplication(tk.Frame):
         self.stop_event = threading.Event()
         self.select_event = threading.Event()
         self.n = 0
-        self.cases = [3]
-        self.recog_typelist = ['corr', 'baye', 'ml']
+        self.pats_status = None
+        self.cases = [3, 10, 15]
+        # self.recog_typelist = ['corr', 'baye', 'ml']
+        self.recog_typelist = ['corr', 'corr', 'corr']
         self.recog = None
         self.recog_type = None
         self.task_cnt = 0
@@ -117,7 +120,7 @@ class MainApplication(tk.Frame):
             self.pats_status = [0] * self.n
             # start new recognizer thread for the new task
             self.stop_event.clear()
-            self.recog = Recognizer(self.stop_event, self.select_event, 1, self.recog_type, self.n)
+            self.recog = Recognizer(self.stop_event, self.select_event, self.cases.index(self.n), self.recog_type, self.n)
             self.recog.start()
             # draw the posters and dots
             self.display()
@@ -184,8 +187,8 @@ class MainApplication(tk.Frame):
 
     def target_check(self):
         if self.select_event.is_set():
-            self.selected_interface()
             self.stop_event.set()
+            self.selected_interface()
             return
         # update the pattern display status
         self.recog.set_display(self.pats_status)
