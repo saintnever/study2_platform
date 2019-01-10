@@ -1,6 +1,6 @@
 import queue
 import threading
-
+import random
 global select_flag
 class Recognizer(threading.Thread):
     def __init__(self, stop_event, select_event, thread_id, name, n):
@@ -37,7 +37,7 @@ class Recognizer(threading.Thread):
             if self.data_queue.full():
                 data = self.data_queue.get()
                 self.select.set()
-                self.target = 0
+                self.target = random.sample(range(self.n), 1)[0]
 
             for state, pat_queue in zip(self.pats_status, self.pat_queues):
                 pat_queue.put(state)

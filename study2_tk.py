@@ -28,6 +28,7 @@ class MainApplication(tk.Frame):
         self.tkimages = []
         self.poster_size = None
         self.poster_aratio = None
+        self.image_size = None
         self.pats = None
         self.pats_selected = None
         self.stop_event = threading.Event()
@@ -53,7 +54,6 @@ class MainApplication(tk.Frame):
         # clean when closing the window
         self.w.bind('<Escape>', self.on_closing)
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
-        self.qselect_flag = queue.Queue(maxsize=100)
 
     def set_winsize(self, win_size):
         self.winsize = win_size
@@ -107,9 +107,9 @@ class MainApplication(tk.Frame):
             # clean from previous task
             self.clean_task()
             self.clean_session()
-            self.rest_text = self.w.create_text(int(self.width / 2), int(self.height / 2), anchor='center', fill = 'red',
-                                      font=("New Roman", 40),
-                                      text='Remaining rest time {}s'.format(self.rest_cnt))
+            self.rest_text = self.w.create_text(int(self.width / 2), int(self.height / 2), anchor='center', fill='red',
+                                                font=("New Roman", 40),
+                                                text='Remaining rest time {}s'.format(self.rest_cnt))
             self.rest_handles.append(self.root.after(1, self.rest))
         else:
             # clean from previous task
@@ -157,6 +157,7 @@ class MainApplication(tk.Frame):
             wpadding = int(image_width / n_col)
             lpadding = rpadding = int((self.width - n_col * image_width - (n_col - 1) * wpadding) / 2)
 
+        self.image_size = (image_width, image_height)
         dot_size = (40, 40)
         for i, image in enumerate(self.posters_selected):
             row = i % n_col
@@ -164,7 +165,7 @@ class MainApplication(tk.Frame):
             x_center = lpadding + row * (wpadding + image_width) + int(image_width / 2)
             y_center = tpadding + col * (hpadding + image_height) + int(image_height / 2)
             # print(col, x_center, y_center)
-            tkimage = ImageTk.PhotoImage(image.resize((image_width, image_height), Image.ANTIALIAS))
+            tkimage = ImageTk.PhotoImage(image.resize(self.image_size, Image.ANTIALIAS))
             self.tkimages.append(tkimage)
             self.w.create_image(x_center, y_center, image=tkimage, anchor='center',
                                 tags=(str(i) + '_poster', 'poster'))
@@ -173,22 +174,32 @@ class MainApplication(tk.Frame):
                                     tags=(str(i) + '_dot', 'dot'), outline='')
 
     def selected_interface(self):
-        print('selected')
-        pass
+        target_i = self.recog.get_target()
+        print(target_i)
+        target_poster = self.w.find_withtag(str(target_i) + '_poster')
+        target_pos = self.w.coords(target_poster)
+        rect_ltx = target_pos[0] - int(self.image_size[0] / 2)
+        rect_lty = target_pos[1] - int(self.image_size[1] / 2)
+        rect_rbx = target_pos[0] + int(self.image_size[0] / 2)
+        rect_rby = target_pos[1] + int(self.image_size[1] / 2)
+        self.w.create_rectangle(rect_ltx, rect_lty, rect_rbx, rect_rby, fill='', outline='cyan', width=10,
+                                tag=('select',))
 
     def target_check(self):
-        print(self.recog.get_target())
         if self.select_event.is_set():
             self.selected_interface()
+            return
         self.check_handles.append(self.root.after(1, self.target_check))
 
     def flash(self, item, i, idx=0):
-        stipples = ['@transparent.xbm', '']
         # if a target is selected, stop blinking
         if self.select_event.is_set():
-            self.w.itemconfigure(item, fill='red', stipple=stipples[0])
+            self.w.itemconfigure(item, fill='')
             return
-        self.w.itemconfigure(item, fill='red', stipple=stipples[idx])
+        if idx:
+            self.w.itemconfigure(item, fill='red')
+        else:
+            self.w.itemconfigure(item, fill='')
         try:
             self.after_handles.append(self.root.after(self.pats_selected[i][0], self.flash, item, i, (idx + 1) % 2))
             self.pats_status[i] = idx
@@ -210,7 +221,7 @@ class MainApplication(tk.Frame):
             for handle in self.check_handles:
                 self.root.after_cancel(handle)
         # delete all poster and dot items on the canvas
-        items = self.w.find_withtag('poster') + self.w.find_withtag('dot')
+        items = self.w.find_withtag('poster') + self.w.find_withtag('dot') + self.w.find_withtag('select')
         if len(items) > 0:
             # delete can only take one item at a time
             for item in items:
