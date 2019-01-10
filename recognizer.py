@@ -44,7 +44,7 @@ class Recognizer(threading.Thread):
             if self.data_queue.full():
                 data = self.data_queue.get()
                 self.start_recog()
-            # maintain display status
+            # maintain display status queues
             for state, pat_queue in zip(self.pats_status, self.pat_queues):
                 pat_queue.put(state)
                 if pat_queue.full():
@@ -53,37 +53,33 @@ class Recognizer(threading.Thread):
 
     def start_recog(self):
         signal = list(self.data_queue.queue)
+        ths = list()
         for i, q in enumerate(self.pat_queues):
             pat = list(q.queue)
             if self.algo == 'corr':
-                self.recog_corr(signal, pat, i)
+                ths.append(self.recog_corr(signal, pat))
             elif self.algo == 'baye':
-                self.recog_baye(signal, pat, i)
+                ths.append(self.recog_baye(signal, pat))
             elif self.algo == 'ml':
-                self.recog_ML(signal, pat, i)
+                ths.append(self.recog_ML(signal, pat))
             else:
                 print('Recognizer does not exist!')
-            if self.select.is_set():
-                break
+        # select target
+        if np.max(ths) > self.TH:
+            self.select.set()
+            self.target = np.argmax(ths)
 
-    def recog_corr(self, signal, pat, i):
+    def recog_corr(self, signal, pat):
         # if np.sum(signal) == 0 and np.sum(signal) == len(signal) and np.sum(pat) == 0 and np.sum(pat) == len(pat):
         #     return
         corr = abs(np.corrcoef(signal, pat)[0][1])
-        print(i, corr)
-        if corr > self.TH:
-            self.select.set()
-            self.target = i
+        return corr
 
-    def recog_baye(self, signal, pat, i):
-        if abs(np.corrcoef(signal, pat)[0][1]) > 0.7:
-            self.select.set()
-            self.target = i
+    def recog_baye(self, signal, pat):
+        return 0
 
-    def recog_ML(self, signal, pat, i):
-        if abs(np.corrcoef(signal, pat)[0][1]) > 0.7:
-            self.select.set()
-            self.target = i
+    def recog_ML(self, signal, pat):
+        return 0
 
     def quit(self):
         # after the thread is joined, all data will be self destroyed

@@ -35,7 +35,7 @@ class MainApplication(tk.Frame):
         self.select_event = threading.Event()
         self.n = 0
         self.pats_status = None
-        self.cases = [3, 10, 15]
+        self.cases = [3]
         # self.recog_typelist = ['corr', 'baye', 'ml']
         self.recog_typelist = ['corr', 'corr', 'corr']
         self.recog = None
@@ -109,8 +109,8 @@ class MainApplication(tk.Frame):
             # clean from previous task
             self.clean_task()
             self.clean_session()
-            self.rest_text = self.w.create_text(int(self.width / 2), int(self.height / 2), anchor='center', fill='red',
-                                                font=("New Roman", 40),
+            self.rest_text = self.w.create_text(int(self.width / 2), int(self.height / 2), anchor='center',
+                                                fill='orange', font=("Microsoft YaHei", 50),
                                                 text='Remaining rest time {}s'.format(self.rest_cnt))
             self.rest_handles.append(self.root.after(1, self.rest))
         else:
@@ -120,7 +120,8 @@ class MainApplication(tk.Frame):
             self.pats_status = [0] * self.n
             # start new recognizer thread for the new task
             self.stop_event.clear()
-            self.recog = Recognizer(self.stop_event, self.select_event, self.cases.index(self.n), self.recog_type, self.n)
+            self.recog = Recognizer(self.stop_event, self.select_event, self.cases.index(self.n), self.recog_type,
+                                    self.n)
             self.recog.start()
             # draw the posters and dots
             self.display()
@@ -243,9 +244,11 @@ class MainApplication(tk.Frame):
         self.rest_cnt = 20
 
     def rest(self):
-        self.w.itemconfigure(self.rest_text, text='Remaining rest time {}s'.format(self.rest_cnt))
+        self.w.itemconfigure(self.rest_text,
+                             text='Session ' + str(self.session_cnt) + ' completed! Remaining rest time {}s'.format(
+                                 self.rest_cnt))
         if self.rest_cnt == 0:
-            self.w.itemconfigure(self.rest_text, text='Press RETURN to start next session')
+            self.w.itemconfigure(self.rest_text, text='Press RETURN to start session ' + str(self.session_cnt + 1))
         else:
             self.rest_cnt -= 1
             self.rest_handles.append(self.root.after(1000, self.rest))
