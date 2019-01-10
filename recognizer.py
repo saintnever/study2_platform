@@ -13,7 +13,6 @@ class Recognizer(threading.Thread):
         self.select = select_event
         self.target = -1
         self.input_status = 0
-        # self.select_flag = select_flag
         self.inteval = 0.01  # in second
         self.win = 2
         self.step = 0.01
