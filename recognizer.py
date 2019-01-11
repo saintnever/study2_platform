@@ -6,7 +6,7 @@ import pandas as pd
 
 
 class Recognizer(threading.Thread):
-    def __init__(self, stop_event, select_event, thread_id, algo, n, pats):
+    def __init__(self, stop_event, select_event, thread_id, algo, n, pats, model_period, model_delay):
         threading.Thread.__init__(self)
         self.thread_id = thread_id
         self.algo = algo
@@ -29,20 +29,21 @@ class Recognizer(threading.Thread):
         self.pats_status = [0 for _ in range(self.n)]
         self.data_queue = queue.Queue(maxsize=int(self.win / self.step))
         self.pat_queues = [queue.Queue(maxsize=int(self.win / self.step)) for _ in range(self.n)]
-        self.model_period = None
-        self.model_delay = None
+        if self.algo == 'baye':
+            self.model_period = model_period
+            self.model_delay = model_delay
         self.init_algo()
 
     def init_algo(self):
-        if self.algo == 'baye':
-            self.model_period = pd.read_csv('./model/freq_allstudy1.csv')
-            self.model_delay = pd.read_csv('./model/delay_allstudy1.csv')
+            # self.model_period = model_period
+
             # print(self.model_period.head(), self.model_delay.head())
             for i, pat in enumerate(self.pats):
                 try:
                     self.pats_baye[pat[0]].append(i)
                 except KeyError:
                     self.pats_baye[pat[0]] = [i]
+            print(self.pats_baye)
 
     def set_input(self, _input):
         self.input_status = _input
@@ -56,6 +57,7 @@ class Recognizer(threading.Thread):
     def run(self):
         data, status = -1, []
         while not self.stopped.wait(self.inteval):
+            # print(self.input_status, self.pats_status)
             # maintain input queue and start recog for current win
             self.data_queue.put(self.input_status)
             if self.data_queue.full():
@@ -64,6 +66,7 @@ class Recognizer(threading.Thread):
             # maintain display status queues
             for state, pat_queue in zip(self.pats_status, self.pat_queues):
                 pat_queue.put(state)
+                # print(state)
                 if pat_queue.full():
                     status.append(pat_queue.get())
         self.quit()
@@ -98,12 +101,15 @@ class Recognizer(threading.Thread):
         for i in range(1, len(signal)):
             if signal[i] is not signal[i - 1]:
                 m_changes.append(i)
+        # print(m_changes)
         m_periods = [(m_changes[i + 1] - m_changes[i]) * self.inteval * 1000 for i in range(len(m_changes) - 1)]
+        # print(m_periods)
         # match study1 to average consecutive periods
-        m_periods = [(m_periods[i + 1] + m_periods[i]) / 2 for i in range(len(m_periods) - 1)]
-
+        m_periods = [(m_periods[i + 1] + m_periods[i]) / 2.0 for i in range(len(m_periods) - 1)]
+        median_period = np.median(m_periods)
+        # print(m_periods)
         # calculate delay for each period
-        prob_all = [[] for _ in range(self.n)]
+        prob_all = [1e-10] * self.n
         prob_periods = dict()
         # prob_delays = dict()
         for period in self.pats_baye.keys():
@@ -111,32 +117,53 @@ class Recognizer(threading.Thread):
             dpats = self.pats_baye[period]
             # estimate prob for each available period
             prob_period = list()
-            for m_period in m_periods:
-                # don't forget the priori!
-                try:
-                    prob_period.append(self.model_period.loc[int(m_period - 200), str(period)] * len(dpats))
-                except KeyError:
-                    prob_period.append(0)
-            prob_periods[period] = np.mean(prob_period)
+
+            # for m_period in m_periods:
+            #     # don't forget the priori!
+            #     try:
+            #         prob_period.append(self.model_period.loc[int(m_period - 200), str(period)])
+            #     except KeyError:
+            #         prob_period.append(0)
+            try:
+                prob_periods[period] = self.model_period.loc[int(median_period - 200), str(period)] * len(dpats)
+            except KeyError:
+                prob_periods[period] = 0
+            except ValueError:
+                prob_periods[period] = 0
+
+        # normalized period prob
+        factor = 1.0 / np.sum([v for k, v in prob_periods.items()])
+        # calculate prob combined with delay
+        for period in self.pats_baye.keys():
+            prob_periods[period] = prob_periods[period] * factor
+            dpats = self.pats_baye[period]
             # m_d = [[] for _ in dpats]
-            # TODO: calculate the combined probs for all pattern.
-            # calculate delay prob
-            prob_delay = [[] for _ in dpats]
-            for i, p in enumerate(dpats):
-                pat = list(self.pat_queues[p].queue)
-                for iperiod in m_changes:
-                    m_delay = self.measure_delay(iperiod, pat)
-                    # m_d[i].append(m_delay)
-                    try:
-                        prob_delay[i].append(self.model_delay.loc[int(m_delay + 400), str(period)])
-                    except KeyError:
-                        prob_delay[i].append(0)
-                print(p, prob_periods[period])
-                prob_all[p] = np.mean(prob_periods[period] * np.array(prob_delay[i]))
+            # calculate delay prob and the combined probs for all pattern.
+            if len(dpats) == 1:
+                prob_all[dpats[0]] = prob_periods[period]
+            else:
+                prob_delay = [1e-10] * len(dpats)
+                for i, p in enumerate(dpats):
+                    prob_temp = list()
+                    pat = list(self.pat_queues[p].queue)
+                    for iperiod in m_changes:
+                        m_delay = self.measure_delay(iperiod, pat)
+                        # m_d[i].append(m_delay)
+                        try:
+                            prob_temp.append(self.model_delay.loc[int(m_delay + 400), str(period)])
+                        except KeyError:
+                            prob_temp.append(0)
+                    prob_delay[i] = np.mean(prob_temp)
+                factor = 1.0 / np.sum(prob_delay)
+                prob_delay = [x*factor for x in prob_delay]
+                # print(period, dpats, prob_delay)
+                for i, p in enumerate(dpats):
+                    prob_all[p] = prob_periods[period] * prob_delay[i]
 
         # select target
         prob_all = prob_all / np.sum(prob_all)
-        print(prob_all)
+        # print(prob_periods)
+        # print(prob_all, np.sum(prob_all))
         if np.max(prob_all) > self.TH:
             self.select.set()
             self.target = np.argmax(prob_all)
@@ -149,12 +176,12 @@ class Recognizer(threading.Thread):
             if nidx > 0:
                 nidx -= 1
                 if pat[nidx] is not istate:
-                    m_delay = (iperiod - nidx) * self.inteval
+                    m_delay = (iperiod - nidx) * self.inteval * 1000
                     break
             if pidx < len(pat) - 1:
                 pidx += 1
                 if pat[pidx] is not istate:
-                    m_delay = (iperiod - pidx) * self.inteval
+                    m_delay = (iperiod - pidx) * self.inteval * 1000
                     break
         return m_delay
 

@@ -7,6 +7,7 @@ from recognizer import Recognizer
 import threading
 import random
 import queue
+import pandas as pd
 
 
 class MainApplication(tk.Frame):
@@ -56,6 +57,8 @@ class MainApplication(tk.Frame):
         # clean when closing the window
         self.w.bind('<Escape>', self.on_closing)
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+        self.model_period = pd.read_csv('./model/freq_allstudy1.csv')
+        self.model_delay = pd.read_csv('./model/delay_allstudy1.csv')
 
     def set_winsize(self, win_size):
         self.winsize = win_size
@@ -118,10 +121,11 @@ class MainApplication(tk.Frame):
             self.clean_task()
             self.state_machine()
             self.pats_status = [0] * self.n
+            print(self.session_cnt, self.task_cnt, self.recog_type)
             # start new recognizer thread for the new task
             self.stop_event.clear()
             self.recog = Recognizer(self.stop_event, self.select_event, self.cases.index(self.n), self.recog_type,
-                                    self.n, self.pats_selected)
+                                    self.n, self.pats_selected, self.model_period, self.model_delay)
             self.recog.start()
             # draw the posters and dots
             self.display()
@@ -129,7 +133,7 @@ class MainApplication(tk.Frame):
             for i, item in enumerate(self.w.find_withtag('dot')):
                 # print(self.pats_selected[i], i, item)
                 self.after_handles.append(self.root.after(self.pats_selected[i][1], self.flash, item, i, 0))
-            self.recog.set_display(self.pats_status)   # this is effectively a global variable, so single pass is enough
+            self.recog.set_display(self.pats_status)  # this is effectively a global variable, so single pass is enough
             self.task_cnt += 1
             self.check_handles.append(self.root.after(1, self.target_check))
 
@@ -163,10 +167,10 @@ class MainApplication(tk.Frame):
         dot_size = (40, 40)
         for i, image in enumerate(self.posters_selected):
             row = i % n_col
-            col = i / n_col
+            col = int(i / n_col)
             x_center = lpadding + row * (wpadding + image_width) + int(image_width / 2)
             y_center = tpadding + col * (hpadding + image_height) + int(image_height / 2)
-            # print(col, x_center, y_center)
+            # print(row, col, x_center, y_center)
             tkimage = ImageTk.PhotoImage(image.resize(self.image_size, Image.ANTIALIAS))
             self.tkimages.append(tkimage)
             self.w.create_image(x_center, y_center, image=tkimage, anchor='center',
@@ -177,7 +181,6 @@ class MainApplication(tk.Frame):
 
     def selected_interface(self):
         target_i = self.recog.get_target()
-        print(target_i)
         target_poster = self.w.find_withtag(str(target_i) + '_poster')
         target_pos = self.w.coords(target_poster)
         rect_ltx = target_pos[0] - int(self.image_size[0] / 2)
