@@ -8,6 +8,7 @@ import threading
 import random
 import queue
 import pandas as pd
+import time
 
 
 class MainApplication(tk.Frame):
@@ -59,6 +60,7 @@ class MainApplication(tk.Frame):
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
         self.model_period = pd.read_csv('./model/freq_allstudy1.csv')
         self.model_delay = pd.read_csv('./model/delay_allstudy1.csv')
+        self.signal = 0
 
     def set_winsize(self, win_size):
         self.winsize = win_size
@@ -124,7 +126,7 @@ class MainApplication(tk.Frame):
             print(self.session_cnt, self.task_cnt, self.recog_type)
             # start new recognizer thread for the new task
             self.stop_event.clear()
-            self.recog = Recognizer(self.stop_event, self.select_event, self.cases.index(self.n), self.recog_type,
+            self.recog = Recognizer(self.stop_event, self.select_event, self.signal, self.recog_type,
                                     self.n, self.pats_selected, self.model_period, self.model_delay)
             self.recog.start()
             # draw the posters and dots
@@ -133,8 +135,8 @@ class MainApplication(tk.Frame):
             for i, item in enumerate(self.w.find_withtag('dot')):
                 # print(self.pats_selected[i], i, item)
                 self.after_handles.append(self.root.after(self.pats_selected[i][1], self.flash, item, i, 0))
-            self.recog.set_display(self.pats_status)  # this is effectively a global variable, so single pass is enough
             self.task_cnt += 1
+
             self.check_handles.append(self.root.after(1, self.target_check))
 
     def display(self):
@@ -198,18 +200,21 @@ class MainApplication(tk.Frame):
         # update the pattern display status
         self.check_handles.append(self.root.after(5, self.target_check))
 
-    def flash(self, item, i, idx=0):
+    def flash(self, item, i, ptime, idx=0):
         # if a target is selected, stop blinking
         if self.select_event.is_set():
             self.w.itemconfigure(item, fill='')
             return
+        # print(self.pats_selected[i], time.time()-ptime)
+        # ptime = time.time()
         if idx:
             self.w.itemconfigure(item, fill='red')
         else:
             self.w.itemconfigure(item, fill='')
         try:
-            self.after_handles.append(self.root.after(self.pats_selected[i][0], self.flash, item, i, (idx + 1) % 2))
+            self.after_handles.append(self.root.after(self.pats_selected[i][0], self.flash, item, i, ptime, (idx + 1) % 2))
             self.pats_status[i] = idx
+            self.recog.set_display(self.pats_status)  # this is effectively a global variable, so single pass is enough
         except IndexError:
             print('IndexError: i is {}, pat length is {}, pat is {}'.format(i, len(self.pats_selected),
                                                                             self.pats_selected))
@@ -258,10 +263,12 @@ class MainApplication(tk.Frame):
 
     def space_pressed(self, event):
         if self.recog:
+            # self.signal = 1
             self.recog.set_input(1)
 
     def space_released(self, event):
         if self.recog:
+            # self.signal = 0
             self.recog.set_input(0)
 
     def on_closing(self, event):
@@ -305,7 +312,7 @@ if __name__ == '__main__':
     root.attributes("-fullscreen", False)
     # win_size = (1920, 1080)
     app = MainApplication(root)
-    app.set_winsize((1920, 1080))
+    app.set_winsize((1680, 1050))
     bg_file = "./photo/bg.jpg"
     app.set_background(bg_file)
 
