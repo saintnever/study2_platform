@@ -16,7 +16,7 @@ class Recognizer(threading.Thread):
         self.pats_baye = dict()
         self.target = -1
         self.n = n
-        self.THs = {'corr3': 0.5, 'corr10': 0.4, 'corr15': 0.4, 'baye3': 0.7, 'baye10': 0.4, 'baye15': 0.3}
+        self.THs = {'corr3': 0.5, 'corr10': 0.4, 'corr15': 0.4, 'baye3': 0.7, 'baye10': 0.3, 'baye15': 0.3}
         self.wins = {'corr3': 3, 'corr10': 5, 'corr15': 5, 'baye3': 2, 'baye10': 5, 'baye15': 6}
         self.win = 2
         self.TH = 0.5
@@ -154,8 +154,8 @@ class Recognizer(threading.Thread):
                         prob_delay = list()
                         for p in dpats:
                             pat = self.pats_q[p]
-                            m_delay = self.measure_delay(m_changes[i], signal[m_changes[i]], pat)
-                            print(period, m_delay)
+                            m_delay = self.measure_delay(m_changes[i], pat)
+                            # print(period, m_delay)
                             # m_d[i].append(m_delay)
                             try:
                                 prob_delay.append(self.model_delay.loc[int(m_delay + 400), str(period)])
@@ -171,14 +171,35 @@ class Recognizer(threading.Thread):
         # average for all taps
         prob_all = [np.mean(x) for x in prob_all]
         prob_all = prob_all / np.sum(prob_all)
-        print(prob_all, np.max(prob_all), np.argmax(prob_all))
         # print(prob_all)
+        prob_all_sorted = np.sort(prob_all)
+        print(prob_all, prob_all_sorted, np.max(prob_all), np.argmax(prob_all))
+
         if np.max(prob_all) > self.TH:
+        # if prob_all_sorted[-1] - prob_all_sorted[-2] > self.TH:
             self.select.set()
             self.target = np.argmax(prob_all)
+            # self.target = list(prob_all).index(prob_all_sorted[-1])
             print('recog {}, selected {}'.format(self.algo, self.pats[self.target]))
 
-    def measure_delay(self, iperiod, sign, pat):
+    def measure_delay(self, iperiod, pat):
+        pidx = nidx = iperiod
+        istate = pat[iperiod]
+        m_delay = len(pat)
+        while nidx > 0 or pidx < len(pat):
+            if nidx > 0:
+                nidx -= 1
+                if pat[nidx] is not istate:
+                    m_delay = (iperiod - nidx) * self.inteval * 1000
+                    break
+            if pidx < len(pat) - 1:
+                pidx += 1
+                if pat[pidx] is not istate:
+                    m_delay = (iperiod - pidx) * self.inteval * 1000
+                    break
+        return m_delay
+
+    def measure_delay_edge(self, iperiod, sign, pat):
         pidx = nidx = iperiod
         istate = pat[iperiod]
         m_delay = len(pat)
