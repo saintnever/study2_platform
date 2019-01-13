@@ -39,14 +39,14 @@ class Recognizer(threading.Thread):
 
     def init_algo(self):
             # self.model_period = model_period
-            print('the pattern set is'.format(self.pats))
+            # print('the pattern set is'.format(self.pats))
             # print(self.model_period.head(), self.model_delay.head())
             for i, pat in enumerate(self.pats):
                 try:
                     self.pats_baye[pat[0]].append(i)
                 except KeyError:
                     self.pats_baye[pat[0]] = [i]
-            print(self.pats_baye)
+            # print(self.pats_baye)
 
     def set_display(self, display):
         self.pats_status = display
@@ -124,7 +124,7 @@ class Recognizer(threading.Thread):
         # if len(m_periods) > 1:
         #     m_periods = [(m_periods[i + 1] + m_periods[i]) / 2.0 for i in range(len(m_periods) - 1)]
         median_period = np.median(m_periods)
-        print('recog thread delta {}, mean {}, median {}'.format(m_periods, np.mean(m_periods), median_period))
+        # print('recog thread delta {}, mean {}, median {}'.format(m_periods, np.mean(m_periods), median_period))
         # calculate delay for each period
         prob_all = [0] * self.n
         prob_periods = dict()
