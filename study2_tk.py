@@ -9,6 +9,7 @@ import random
 import queue
 import pandas as pd
 import time
+import numpy as np
 
 
 class MainApplication(tk.Frame):
@@ -61,6 +62,13 @@ class MainApplication(tk.Frame):
         self.model_period = pd.read_csv('./model/freq_allstudy1.csv')
         self.model_delay = pd.read_csv('./model/delay_allstudy1.csv')
         self.signal = 0
+        self.p = list()
+        self.tprev = time.time()
+        self.wins = {'corr3': 3, 'corr10': 5, 'corr15': 5, 'baye3': 2, 'baye10': 5, 'baye15': 6}
+        self.win = 2
+        self.interval = 0.01
+        self.sig_queue = None
+        self.pat_queues = list()
 
     def set_winsize(self, win_size):
         self.winsize = win_size
@@ -89,7 +97,7 @@ class MainApplication(tk.Frame):
     def set_pats(self, pat_set):
         self.pats = pat_set
 
-    def state_machine(self):
+    def task_init(self):
         # init the task sequence for current session
         if self.task_cnt == 0:
             for case in self.cases:
@@ -106,6 +114,11 @@ class MainApplication(tk.Frame):
                 self.pats_selected = pat
         assert len(self.posters_selected) == len(self.pats_selected)
 
+        # init queue
+        self.win = self.wins.get(self.recog_type + str(self.n))
+        self.sig_queue = queue.Queue(maxsize=int(self.win / self.interval))
+        self.pat_queues = [queue.Queue(maxsize=int(self.win / self.interval)) for _ in range(self.n)]
+
     def id_input(self):
         pass
 
@@ -121,13 +134,13 @@ class MainApplication(tk.Frame):
         else:
             # clean from previous task
             self.clean_task()
-            self.state_machine()
+            self.task_init()
             self.pats_status = [0] * self.n
             print(self.session_cnt, self.task_cnt, self.recog_type)
             # start new recognizer thread for the new task
             self.stop_event.clear()
-            self.recog = Recognizer(self.stop_event, self.select_event, self.signal, self.recog_type,
-                                    self.n, self.pats_selected, self.model_period, self.model_delay)
+            self.recog = Recognizer(self.stop_event, self.select_event, self.sig_queue, self.pat_queues, self.recog_type,
+                                    self.n, self.interval, self.pats_selected, self.model_period, self.model_delay)
             self.recog.start()
             # draw the posters and dots
             self.display()
@@ -195,10 +208,19 @@ class MainApplication(tk.Frame):
     def target_check(self):
         if self.select_event.is_set():
             self.stop_event.set()
+            print('the mean is {}, median is {}'.format(np.mean(self.p[1:]), np.median(self.p[1:])))
             self.selected_interface()
             return
-        # update the pattern display status
-        self.check_handles.append(self.root.after(5, self.target_check))
+        # update the input signal and pattern display status
+        self.q_put(self.sig_queue, self.signal)
+        for q, state in zip(self.pat_queues, self.pats_status):
+            self.q_put(q, state)
+        self.check_handles.append(self.root.after(int(self.interval*1000), self.target_check))
+
+    def q_put(self, q, data):
+        if q.full():
+            q.get()
+        q.put(data)
 
     def flash(self, item, i, ptime, idx=0):
         # if a target is selected, stop blinking
@@ -221,10 +243,12 @@ class MainApplication(tk.Frame):
 
     def clean_task(self):
         # terminate the current thread and clear the selected flag
+        self.p = list()
         self.stop_event.set()
         self.select_event.clear()
         if self.recog:
             self.recog.join()
+
         # cancel all after functions started in the current selection task
         if len(self.after_handles) > 0:
             for handle in self.after_handles:
@@ -241,6 +265,13 @@ class MainApplication(tk.Frame):
         if self.rest_text is not None:
             self.w.delete(self.rest_text)
         self.tkimages = []
+
+        # if self.sig_queue:
+        #     with self.sig_queue.mutex:
+        #         del self.sig_queue
+        #     for q in self.pat_queues:
+        #         with q.mutex:
+        #             del q
 
     def clean_session(self):
         if len(self.rest_handles) > 0:
@@ -262,14 +293,22 @@ class MainApplication(tk.Frame):
             self.rest_handles.append(self.root.after(1000, self.rest))
 
     def space_pressed(self, event):
+        if self.signal == 0:
+            self.p.append(time.time() - self.tprev)
+            print("pressed, time delta is {}".format(time.time() - self.tprev))
+            self.tprev = time.time()
         if self.recog:
-            # self.signal = 1
-            self.recog.set_input(1)
+            self.signal = 1
+            # self.recog.set_input(1)
 
     def space_released(self, event):
+        if self.signal == 1:
+            self.p.append(time.time() - self.tprev)
+            print("released, time delta is {}".format(time.time() - self.tprev))
+            self.tprev = time.time()
         if self.recog:
-            # self.signal = 0
-            self.recog.set_input(0)
+            self.signal = 0
+            # self.recog.set_input(0)
 
     def on_closing(self, event):
         self._on_closing()

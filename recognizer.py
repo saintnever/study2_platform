@@ -7,7 +7,7 @@ import time
 
 
 class Recognizer(threading.Thread):
-    def __init__(self, stop_event, select_event, signal, algo, n, pats, model_period, model_delay):
+    def __init__(self, stop_event, select_event, sig_queue, pat_queues, algo, n, interval, pats, model_period, model_delay):
         threading.Thread.__init__(self)
         self.algo = algo
         self.stopped = stop_event
@@ -15,7 +15,6 @@ class Recognizer(threading.Thread):
         self.pats = pats
         self.pats_baye = dict()
         self.target = -1
-        self.input_status = signal
         self.n = n
         self.THs = {'corr3': 0.5, 'corr10': 0.4, 'corr15': 0.4, 'baye3': 0.7, 'baye10': 0.4, 'baye15': 0.3}
         self.wins = {'corr3': 3, 'corr10': 5, 'corr15': 5, 'baye3': 2, 'baye10': 5, 'baye15': 6}
@@ -25,11 +24,14 @@ class Recognizer(threading.Thread):
             self.win = self.wins.get(self.algo + str(self.n))
             self.TH = self.THs.get(self.algo + str(self.n))
             print(self.win, self.TH, self.n)
-        self.inteval = 0.01  # in second
+        self.inteval = interval  # in second
+        self.win_n = int(self.win / self.inteval)
         self.step = self.inteval
         self.pats_status = [0 for _ in range(self.n)]
-        self.data_queue = queue.Queue(maxsize=int(self.win / self.inteval))
-        self.pat_queues = [queue.Queue(maxsize=int(self.win / self.inteval)) for _ in range(self.n)]
+        self.data_queue = sig_queue
+        self.pat_queues = pat_queues
+        self.sigs_q = list()
+        self.pats_q = [[] for _ in self.pat_queues]
         if self.algo == 'baye':
             self.model_period = model_period
             self.model_delay = model_delay
@@ -46,9 +48,6 @@ class Recognizer(threading.Thread):
                     self.pats_baye[pat[0]] = [i]
             print(self.pats_baye)
 
-    def set_input(self, _input):
-        self.input_status = _input
-
     def set_display(self, display):
         self.pats_status = display
 
@@ -57,40 +56,24 @@ class Recognizer(threading.Thread):
 
     def run(self):
         data, status = -1, []
-        tmp = time.time()
+        print(self.stopped.is_set())
         while not self.stopped.is_set():
-            tmp = time.time()
-            # maintain input queue and start recog for current win
-            self.data_queue.put(self.input_status)
-            if self.data_queue.full():
-                self.data_queue.get()
+            # get input queue and start recog for current win
+            try:
+                self.sigs_q.append(self.data_queue.get(timeout=1))
+                for pat, q_pat in zip(self.pats_q, self.pat_queues):
+                    pat.append(q_pat.get(timeout=1))
+            except queue.Empty:
+                continue
+            # print(len(self.sigs_q))
+            if len(self.sigs_q) > self.win_n:
                 self.start_recog()
-            # maintain display status queues
-            for state, pat_queue in zip(self.pats_status, self.pat_queues):
-                pat_queue.put(state)
-                # print(state)
-                if pat_queue.full():
-                    pat_queue.get()
-            delta = time.time() - tmp
-            # print(self.input_status, self.inteval-delta)
-            if delta < self.inteval:
-                time.sleep(self.inteval - delta)
-
-
-        # while not self.stopped.wait(timeout=self.inteval):
-        #     print(self.input_status, time.time() - tmp)
-            # maintain input queue and start recog for current win
-            # self.data_queue.put_nowait([self.input_status, time.time()-tmp])
-            # if self.data_queue.full():
-            #     self.data_queue.get_nowait()
-                # self.start_recog()
-            # maintain display status queues
-            # for state, pat_queue in zip(self.pats_status, self.pat_queues):
-            #     pat_queue.put([state, time.time()-tmp])
-            #     # print(state)
-            #     if pat_queue.full():
-            #         status.append(pat_queue.get_nowait())
-            # tmp = time.time()
+            # if len(self.sigs_q) == int(self.win / self.inteval):
+            #     self.start_recog()
+            #     self.sigs_q = self.sigs_q[1:]
+            #     for pat in self.pats_q:
+            #         pat = pat[1:]
+            #         print( len(pat) == len(self.sigs_q))
 
         self.quit()
 
@@ -119,19 +102,30 @@ class Recognizer(threading.Thread):
             self.target = np.argmax(probs)
 
     def recog_baye(self):
-        signal = list(self.data_queue.queue)
+        signal = self.sigs_q
         # print(signal)
         m_changes = list()
-        for i in range(1, len(signal)):
-            if signal[i] is not signal[i - 1]:
-                m_changes.append(i)
+        i = 0
+        while True:
+            try:
+                if signal[-i] is not self.sigs_q[-(i+1)]:
+                    m_changes.append(len(self.sigs_q) - i)
+                    if i > self.win_n:
+                        break
+                i += 1
+            except IndexError:
+                break
+
+        m_changes = m_changes[1:]
+        m_changes.reverse()
         # print(m_changes)
-        m_periods = [(m_changes[i + 1] - m_changes[i]) * self.inteval * 1000 for i in range(len(m_changes) - 1)]
+        m_periods = [(m_changes[i + 1] - m_changes[i] + 1) * self.inteval * 1000 for i in range(len(m_changes) - 1)]
         # print(m_periods)
         # match study1 to average consecutive periods
-        m_periods = [(m_periods[i + 1] + m_periods[i]) / 2.0 for i in range(len(m_periods) - 1)]
+        if len(m_periods) > 1:
+            m_periods = [(m_periods[i + 1] + m_periods[i]) / 2.0 for i in range(len(m_periods) - 1)]
         median_period = np.median(m_periods)
-        # print(m_periods)
+        print('recog thread delta {}, mean {}, median {}'.format(m_periods, np.mean(m_periods), median_period))
         # calculate delay for each period
         prob_all = [0] * self.n
         prob_periods = dict()
@@ -139,6 +133,7 @@ class Recognizer(threading.Thread):
         for period in self.pats_baye.keys():
             # pats with different delays for current period
             dpats = self.pats_baye[period]
+            # print(period, dpats)
             # estimate prob for each available period
             prob_period = list()
 
@@ -169,7 +164,7 @@ class Recognizer(threading.Thread):
                 prob_delay = list()
                 for p in dpats:
                     prob_temp = list()
-                    pat = list(self.pat_queues[p].queue)
+                    pat = self.pats_q[p]
                     for iperiod in m_changes:
                         m_delay = self.measure_delay(iperiod, pat)
                         # m_d[i].append(m_delay)
@@ -189,7 +184,7 @@ class Recognizer(threading.Thread):
         # select target
         prob_all = prob_all / np.sum(prob_all)
         # print(prob_all, np.max(prob_all), np.argmax(prob_all))
-        # print(prob_all, np.sum(prob_all))
+        print(prob_periods, prob_all)
         if np.max(prob_all) > self.TH:
             self.select.set()
             self.target = np.argmax(prob_all)
@@ -216,7 +211,11 @@ class Recognizer(threading.Thread):
         return 0
 
     def quit(self):
-        del self.data_queue
-        for q in self.pat_queues:
-            del q
+        print('stopped')
+        # if self.data_queue:
+        #     with self.data_queue.mutex:
+        #         del self.data_queue
+        #     for q in self.pat_queues:
+        #         with q.mutex:
+        #             del q
         pass
