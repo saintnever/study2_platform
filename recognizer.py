@@ -39,7 +39,7 @@ class Recognizer(threading.Thread):
 
     def init_algo(self):
             # self.model_period = model_period
-
+            print('the pattern set is'.format(self.pats))
             # print(self.model_period.head(), self.model_delay.head())
             for i, pat in enumerate(self.pats):
                 try:
@@ -122,8 +122,8 @@ class Recognizer(threading.Thread):
         m_periods = [(m_changes[i + 1] - m_changes[i] + 1) * self.inteval * 1000 for i in range(len(m_changes) - 1)]
         # print(m_periods)
         # match study1 to average consecutive periods
-        if len(m_periods) > 1:
-            m_periods = [(m_periods[i + 1] + m_periods[i]) / 2.0 for i in range(len(m_periods) - 1)]
+        # if len(m_periods) > 1:
+        #     m_periods = [(m_periods[i + 1] + m_periods[i]) / 2.0 for i in range(len(m_periods) - 1)]
         median_period = np.median(m_periods)
         print('recog thread delta {}, mean {}, median {}'.format(m_periods, np.mean(m_periods), median_period))
         # calculate delay for each period
@@ -156,12 +156,14 @@ class Recognizer(threading.Thread):
             prob_periods[period] = prob_periods[period] / factor
             # print(period, prob_periods[period])
             dpats = self.pats_baye[period]
+
             # m_d = [[] for _ in dpats]
             # calculate delay prob and the combined probs for all pattern.
+            prob_delay = list()
+
             if len(dpats) == 1:
                 prob_all[dpats[0]] = prob_periods[period]
             else:
-                prob_delay = list()
                 for p in dpats:
                     prob_temp = list()
                     pat = self.pats_q[p]
@@ -174,17 +176,18 @@ class Recognizer(threading.Thread):
                             prob_temp.append(0)
                     prob_delay.append(np.mean(prob_temp))
                     # print(prob_temp, period, p)
-                factor = 1.0 / np.sum(prob_delay)
-                prob_delay = [x*factor for x in prob_delay]
+                prob_delay = prob_delay / np.sum(prob_delay)
                 # print(prob_delay)
                 # print(period, dpats, prob_delay)
                 for i, p in enumerate(dpats):
                     prob_all[p] = prob_periods[period] * prob_delay[i]
+            # print('period {}, dpats {}, prob_period {}, prob_delay {}, prob_all {}'.format(period, dpats, \
+            #                                                     prob_periods[period], prob_delay, prob_all))
 
         # select target
         prob_all = prob_all / np.sum(prob_all)
         # print(prob_all, np.max(prob_all), np.argmax(prob_all))
-        print(prob_periods, prob_all)
+        # print(prob_periods, prob_all)
         if np.max(prob_all) > self.TH:
             self.select.set()
             self.target = np.argmax(prob_all)
