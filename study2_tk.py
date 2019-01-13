@@ -40,7 +40,7 @@ class MainApplication(tk.Frame):
         self.pats_status = None
         self.cases = [3, 10, 15]
         # self.recog_typelist = ['corr', 'baye', 'ml']
-        self.recog_typelist = ['baye', 'corr']
+        self.recog_typelist = ['baye']
         self.recog = None
         self.recog_type = None
         self.task_cnt = 0

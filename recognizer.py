@@ -35,7 +35,9 @@ class Recognizer(threading.Thread):
         if self.algo == 'baye':
             self.model_period = model_period
             self.model_delay = model_delay
+            self.mchanges_prev = None
         self.init_algo()
+
 
     def init_algo(self):
             # self.model_period = model_period
@@ -117,76 +119,58 @@ class Recognizer(threading.Thread):
 
         m_changes = m_changes[1:]
         m_changes.reverse()
-        # print(m_changes)
+        if m_changes == self.mchanges_prev:
+            return
+        self.mchanges_prev = m_changes
         m_periods = [(m_changes[i + 1] - m_changes[i] + 1) * self.inteval * 1000 for i in range(len(m_changes) - 1)]
-        # print(m_periods)
-        # match study1 to average consecutive periods
-        # if len(m_periods) > 1:
-        #     m_periods = [(m_periods[i + 1] + m_periods[i]) / 2.0 for i in range(len(m_periods) - 1)]
         median_period = np.median(m_periods)
         print('recog thread delta {}, mean {}, median {}'.format(m_periods, np.mean(m_periods), median_period))
         # calculate delay for each period
-        prob_all = [0] * self.n
-        prob_periods = dict()
-        # prob_delays = dict()
-        for period in self.pats_baye.keys():
-            # pats with different delays for current period
-            dpats = self.pats_baye[period]
-            # print(period, dpats)
-            # estimate prob for each available period
-            prob_period = list()
+        prob_all = [[] for _ in self.pats_q]
+        # prob_periods = dict()
 
-            # for m_period in m_periods:
-            #     # don't forget the priori!
-            #     try:
-            #         prob_period.append(self.model_period.loc[int(m_period - 200), str(period)])
-            #     except KeyError:
-            #         prob_period.append(0)
-            try:
-                prob_periods[period] = self.model_period.loc[int(median_period - 200), str(period)] * len(dpats)
-            except (KeyError, ValueError) as e:
-                prob_periods[period] = 0
+        # pats with different delays for current period
+        for i in range(1, len(m_changes)):
+            if i > 0:
+                # get probability for all periods. The measured period is the time different between the current tap and the previous tap
+                mperiod = int((m_changes[i] - m_changes[i - 1]) * self.inteval * 1000)
+                prob_period = dict()
+                for period in self.pats_baye.keys():
+                    dpats = self.pats_baye[period]
+                    try:
+                        prob_period[period] = self.model_period.loc[int(mperiod - 200), str(period)] * len(dpats)
+                    except KeyError:
+                        prob_period[period] = 0
+                # print(prob_period)
+                factor = np.sum([v for k, v in prob_period.items()])
+                # get overall probability with delay
+                for period in self.pats_baye.keys():
+                    dpats = self.pats_baye[period]
+                    prob_period[period] = prob_period[period] / factor
+                    if len(dpats) == 1:
+                        prob_all[dpats[0]].append(prob_period[period])
+                    else:
+                        prob_delay = list()
+                        for p in dpats:
+                            pat = self.pats_q[p]
+                            m_delay = self.measure_delay(m_changes[i], pat)
+                            # m_d[i].append(m_delay)
+                            try:
+                                prob_delay.append(self.model_delay.loc[int(m_delay + 400), str(period)])
+                            except KeyError:
+                                prob_delay.append(0)
+                            # print(prob_temp, period, p)
+                        prob_delay_norm = prob_delay / np.sum(prob_delay)
+                        for j, p in enumerate(dpats):
+                            prob_all[p].append(prob_period[period] * prob_delay_norm[j])
+                    # print('period {}, dpats {}, prob_period {},  prob_all {}'.format(period, dpats,
+                    #                                                     prob_period[period], prob_all))
 
-        # normalized period prob
-        factor = np.sum([v for k, v in prob_periods.items()])
-        # print(prob_periods, factor)
-        # calculate prob combined with delay
-        for period in self.pats_baye.keys():
-            prob_periods[period] = prob_periods[period] / factor
-            # print(period, prob_periods[period])
-            dpats = self.pats_baye[period]
-
-            # m_d = [[] for _ in dpats]
-            # calculate delay prob and the combined probs for all pattern.
-            prob_delay = list()
-
-            if len(dpats) == 1:
-                prob_all[dpats[0]] = prob_periods[period]
-            else:
-                for p in dpats:
-                    prob_temp = list()
-                    pat = self.pats_q[p]
-                    for iperiod in m_changes:
-                        m_delay = self.measure_delay(iperiod, pat)
-                        # m_d[i].append(m_delay)
-                        try:
-                            prob_temp.append(self.model_delay.loc[int(m_delay + 400), str(period)])
-                        except KeyError:
-                            prob_temp.append(0)
-                    prob_delay.append(np.mean(prob_temp))
-                    # print(prob_temp, period, p)
-                prob_delay = prob_delay / np.sum(prob_delay)
-                # print(prob_delay)
-                # print(period, dpats, prob_delay)
-                for i, p in enumerate(dpats):
-                    prob_all[p] = prob_periods[period] * prob_delay[i]
-            # print('period {}, dpats {}, prob_period {}, prob_delay {}, prob_all {}'.format(period, dpats, \
-            #                                                     prob_periods[period], prob_delay, prob_all))
-
-        # select target
+        # average for all taps
+        prob_all = [np.mean(x) for x in prob_all]
         prob_all = prob_all / np.sum(prob_all)
-        # print(prob_all, np.max(prob_all), np.argmax(prob_all))
-        # print(prob_periods, prob_all)
+        print(prob_all, np.max(prob_all), np.argmax(prob_all))
+        # print(prob_all)
         if np.max(prob_all) > self.TH:
             self.select.set()
             self.target = np.argmax(prob_all)
