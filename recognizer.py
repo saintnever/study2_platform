@@ -94,7 +94,8 @@ class Recognizer(threading.Thread):
         signal = self.sigs_q[-self.win_n:]
         probs = list()
         for pat in self.pats_q:
-            probs.append(abs(np.corrcoef(signal, pat[-self.win_n:])[0][1]))
+            # probs.append(abs(np.corrcoef(signal, pat[-self.win_n:])[0][1]))
+            probs.append(np.corrcoef(signal, pat[-self.win_n:])[0][1])
 
         # select target
         if np.max(probs) > self.TH:
@@ -124,7 +125,7 @@ class Recognizer(threading.Thread):
         self.mchanges_prev = m_changes
         m_periods = [(m_changes[i + 1] - m_changes[i] + 1) * self.inteval * 1000 for i in range(len(m_changes) - 1)]
         median_period = np.median(m_periods)
-        print('recog thread delta {}, mean {}, median {}'.format(m_periods, np.mean(m_periods), median_period))
+        # print('recog thread delta {}, mean {}, median {}'.format(m_periods, np.mean(m_periods), median_period))
         # calculate delay for each period
         prob_all = [[] for _ in self.pats_q]
         # prob_periods = dict()
@@ -153,7 +154,8 @@ class Recognizer(threading.Thread):
                         prob_delay = list()
                         for p in dpats:
                             pat = self.pats_q[p]
-                            m_delay = self.measure_delay(m_changes[i], pat)
+                            m_delay = self.measure_delay(m_changes[i], signal[m_changes[i]], pat)
+                            print(period, m_delay)
                             # m_d[i].append(m_delay)
                             try:
                                 prob_delay.append(self.model_delay.loc[int(m_delay + 400), str(period)])
@@ -176,19 +178,24 @@ class Recognizer(threading.Thread):
             self.target = np.argmax(prob_all)
             print('recog {}, selected {}'.format(self.algo, self.pats[self.target]))
 
-    def measure_delay(self, iperiod, pat):
+    def measure_delay(self, iperiod, sign, pat):
         pidx = nidx = iperiod
         istate = pat[iperiod]
         m_delay = len(pat)
+        if sign == 0:
+            edge = -1
+        else:
+            edge = 1
+        # sign = 0, falling edge; sign = 1, rising edge
         while nidx > 0 or pidx < len(pat):
             if nidx > 0:
                 nidx -= 1
-                if pat[nidx] is not istate:
+                if pat[nidx + 1] - pat[nidx] == edge:
                     m_delay = (iperiod - nidx) * self.inteval * 1000
                     break
             if pidx < len(pat) - 1:
                 pidx += 1
-                if pat[pidx] is not istate:
+                if pat[pidx] - pat[pidx - 1] == edge:
                     m_delay = (iperiod - pidx) * self.inteval * 1000
                     break
         return m_delay

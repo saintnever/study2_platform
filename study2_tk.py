@@ -69,6 +69,7 @@ class MainApplication(tk.Frame):
         self.interval = 0.01
         self.sig_queue = None
         self.pat_queues = list()
+        self.task_time = 0
 
     def set_winsize(self, win_size):
         self.winsize = win_size
@@ -118,6 +119,7 @@ class MainApplication(tk.Frame):
         self.win = self.wins.get(self.recog_type + str(self.n))
         self.sig_queue = queue.Queue(maxsize=int(self.win / self.interval))
         self.pat_queues = [queue.Queue(maxsize=int(self.win / self.interval)) for _ in range(self.n)]
+        self.task_time = time.time()
 
     def id_input(self):
         pass
@@ -208,7 +210,8 @@ class MainApplication(tk.Frame):
     def target_check(self):
         if self.select_event.is_set():
             self.stop_event.set()
-            print('the mean is {}, median is {}'.format(np.mean(self.p[1:]), np.median(self.p[1:])))
+            self.task_time = time.time() - self.task_time
+            print('the mean is {}, median is {}, duration is {}'.format(np.mean(self.p[1:]), np.median(self.p[1:]), self.task_time))
             self.selected_interface()
             return
         # update the input signal and pattern display status
@@ -265,7 +268,7 @@ class MainApplication(tk.Frame):
         if self.rest_text is not None:
             self.w.delete(self.rest_text)
         self.tkimages = []
-
+        self.task_time = 0
         # if self.sig_queue:
         #     with self.sig_queue.mutex:
         #         del self.sig_queue
@@ -295,7 +298,7 @@ class MainApplication(tk.Frame):
     def space_pressed(self, event):
         if self.signal == 0:
             self.p.append(time.time() - self.tprev)
-            print("pressed, time delta is {}".format(time.time() - self.tprev))
+            # print("pressed, time delta is {}".format(time.time() - self.tprev))
             self.tprev = time.time()
         if self.recog:
             self.signal = 1
@@ -304,7 +307,7 @@ class MainApplication(tk.Frame):
     def space_released(self, event):
         if self.signal == 1:
             self.p.append(time.time() - self.tprev)
-            print("released, time delta is {}".format(time.time() - self.tprev))
+            # print("released, time delta is {}".format(time.time() - self.tprev))
             self.tprev = time.time()
         if self.recog:
             self.signal = 0
