@@ -40,7 +40,7 @@ class MainApplication(tk.Frame):
         self.pats_status = None
         self.cases = [3, 10, 15]
         # self.recog_typelist = ['corr', 'baye', 'ml']
-        self.recog_typelist = ['baye']
+        self.recog_typelist = ['baye', 'corr']
         self.recog = None
         self.recog_type = None
         self.task_cnt = 0
@@ -316,6 +316,7 @@ class MainApplication(tk.Frame):
     def _on_closing(self):
         print('CLOSING THE WINDOW...')
         self.clean_task()
+
         self.clean_session()
         self.root.destroy()
 

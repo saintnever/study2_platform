@@ -56,7 +56,6 @@ class Recognizer(threading.Thread):
 
     def run(self):
         data, status = -1, []
-        print(self.stopped.is_set())
         while not self.stopped.is_set():
             # get input queue and start recog for current win
             try:
@@ -90,16 +89,16 @@ class Recognizer(threading.Thread):
     def recog_corr(self):
         # if np.sum(signal) == 0 and np.sum(signal) == len(signal) and np.sum(pat) == 0 and np.sum(pat) == len(pat):
         #     return 0
-        signal = list(self.data_queue.queue)
+        signal = self.sigs_q[-self.win_n:]
         probs = list()
-        for i, q in enumerate(self.pat_queues):
-            pat = list(q)
-            probs.append(abs(np.corrcoef(signal, pat)[0][1]))
+        for pat in self.pats_q:
+            probs.append(abs(np.corrcoef(signal, pat[-self.win_n:])[0][1]))
 
         # select target
         if np.max(probs) > self.TH:
             self.select.set()
             self.target = np.argmax(probs)
+            print('recog {}, selected {}'.format(self.algo, self.pats[self.target]))
 
     def recog_baye(self):
         signal = self.sigs_q
@@ -191,7 +190,7 @@ class Recognizer(threading.Thread):
         if np.max(prob_all) > self.TH:
             self.select.set()
             self.target = np.argmax(prob_all)
-            print('selected {}'.format(self.pats[self.target]))
+            print('recog {}, selected {}'.format(self.algo, self.pats[self.target]))
 
     def measure_delay(self, iperiod, pat):
         pidx = nidx = iperiod
