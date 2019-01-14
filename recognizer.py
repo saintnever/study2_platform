@@ -125,8 +125,8 @@ class Recognizer(threading.Thread):
         m_periods = [(m_changes[i + 1] - m_changes[i] + 1) * self.inteval * 1000 for i in range(len(m_changes) - 1)]
         # print(m_periods)
         # match study1 to average consecutive periods
-        # if len(m_periods) > 1:
-        #     m_periods = [(m_periods[i + 1] + m_periods[i]) / 2.0 for i in range(len(m_periods) - 1)]
+        if len(m_periods) > 1:
+            m_periods = [(m_periods[i + 1] + m_periods[i]) / 2.0 for i in range(len(m_periods) - 1)]
         median_period = np.median(m_periods)
         # print('recog thread delta {}, mean {}, median {}'.format(m_periods, np.mean(m_periods), median_period))
         # calculate delay for each period
@@ -136,20 +136,20 @@ class Recognizer(threading.Thread):
         for period in self.pats_baye.keys():
             # pats with different delays for current period
             dpats = self.pats_baye[period]
-            # print(period, dpats)
-            # estimate prob for each available period
-            prob_period = list()
-            for m_period in m_periods:
-                # don't forget the priori!
-                try:
-                    prob_period.append(self.model_period.loc[int(m_period - 200), str(period)] * len(dpats))
-                except (KeyError, ValueError):
-                    prob_period.append(0)
-            prob_periods[period] = np.mean(prob_period)
-            # try:
-            #     prob_periods[period] = self.model_period.loc[int(m_period - 200), str(period)] * len(dpats)
-            # except (KeyError, ValueError) as e:
-            #     prob_periods[period] = 0
+        #     # print(period, dpats)
+        #     # estimate prob for each available period
+        #     prob_period = list()
+        #     for m_period in m_periods:
+        #         # don't forget the priori!
+        #         try:
+        #             prob_period.append(self.model_period.loc[int(m_period - 200), str(period)] * len(dpats))
+        #         except (KeyError, ValueError):
+        #             prob_period.append(0)
+        #     prob_periods[period] = np.mean(prob_period)
+            try:
+                prob_periods[period] = self.model_period.loc[int(median_period - 200), str(period)] * len(dpats)
+            except (KeyError, ValueError) as e:
+                prob_periods[period] = 0
 
         # normalized period prob
         factor = np.sum([v for k, v in prob_periods.items()])
@@ -192,12 +192,12 @@ class Recognizer(threading.Thread):
         # print(prob_all, np.max(prob_all), np.argmax(prob_all))
 
         prob_all_sorted = np.sort(prob_all)
-        print(prob_periods, prob_all, prob_all_sorted)
-        # if np.max(prob_all) > self.TH:
-        if prob_all_sorted[-1] - prob_all_sorted[-2] > self.TH:
+        # print(prob_periods, prob_all, prob_all_sorted)
+        if np.max(prob_all) > self.TH:
+        # if prob_all_sorted[-1] - prob_all_sorted[-2] > self.TH:
             self.select.set()
-            # self.target = np.argmax(prob_all)
-            self.target= list(prob_all).index(prob_all_sorted[-1])
+            self.target = np.argmax(prob_all)
+            # self.target= list(prob_all).index(prob_all_sorted[-1])
             print('recog {}, selected {}'.format(self.algo, self.pats[self.target]))
 
     def measure_delay(self, iperiod, pat):
