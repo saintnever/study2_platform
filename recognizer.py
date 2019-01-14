@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 import time
 
-
 class Recognizer(threading.Thread):
     def __init__(self, stop_event, select_event, sig_queue, pat_queues, algo, n, interval, pats, model_period, model_delay):
         threading.Thread.__init__(self)
@@ -219,6 +218,7 @@ class Recognizer(threading.Thread):
         return m_delay
 
     def recog_ML(self):
+
         return 0
 
     def quit(self):
