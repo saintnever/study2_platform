@@ -4,7 +4,9 @@ import random
 import numpy as np
 import pandas as pd
 import time
-
+import pickle
+import tsfresh
+from tsfresh.feature_extraction import MinimalFCParameters
 
 class Recognizer(threading.Thread):
     def __init__(self, stop_event, select_event, sig_queue, pat_queues, algo, n, interval, pats, model_period, model_delay):
@@ -16,7 +18,8 @@ class Recognizer(threading.Thread):
         self.pats_baye = dict()
         self.target = -1
         self.n = n
-        self.THs = {'corr3': 0.5, 'corr10': 0.4, 'corr15': 0.4, 'baye3': 0.7, 'baye10': 0.3, 'baye15': 0.3}
+        # self.THs = {'corr3': 0.5, 'corr10': 0.4, 'corr15': 0.4, 'baye3': 0.7, 'baye10': 0.3, 'baye15': 0.3}
+        self.THs = {'corr3': 0.5, 'corr10': 0.4, 'corr15': 0.4, 'baye3': 1.0/3, 'baye10': 1.0/10, 'baye15': 1.0/20}
         self.wins = {'corr3': 3, 'corr10': 5, 'corr15': 5, 'baye3': 2, 'baye10': 5, 'baye15': 6}
         self.win = 2
         self.TH = 0.5
@@ -31,13 +34,17 @@ class Recognizer(threading.Thread):
         self.data_queue = sig_queue
         self.pat_queues = pat_queues
         self.sigs_q = list()
+        self.mchanges_prev = None
         self.pats_q = [[] for _ in self.pat_queues]
         if self.algo == 'baye':
             self.model_period = model_period
             self.model_delay = model_delay
-            self.mchanges_prev = None
+        if self.algo == 'ml':
+            with open('../random_forest_clf_minimal.pickle', 'rb') as file:
+                self.model_ML = pickle.load(file)
+            with open('features.pickle', 'rb') as file:
+                self.feature_ML = pickle.load(file)
         self.init_algo()
-
 
     def init_algo(self):
             # self.model_period = model_period
@@ -175,11 +182,11 @@ class Recognizer(threading.Thread):
         prob_all_sorted = np.sort(prob_all)
         print(prob_all, prob_all_sorted, np.max(prob_all), np.argmax(prob_all))
 
-        if np.max(prob_all) > self.TH:
-        # if prob_all_sorted[-1] - prob_all_sorted[-2] > self.TH:
+        # if np.max(prob_all) > self.TH:
+        if prob_all_sorted[-1] - prob_all_sorted[-2] > self.TH:
             self.select.set()
-            self.target = np.argmax(prob_all)
-            # self.target = list(prob_all).index(prob_all_sorted[-1])
+            # self.target = np.argmax(prob_all)
+            self.target = list(prob_all).index(prob_all_sorted[-1])
             print('recog {}, selected {}'.format(self.algo, self.pats[self.target]))
 
     def measure_delay(self, iperiod, pat):
@@ -222,7 +229,101 @@ class Recognizer(threading.Thread):
         return m_delay
 
     def recog_ML(self):
-        return 0
+        signal = self.sigs_q
+        # print(signal)
+        m_changes = list()
+        i = 0
+        for i in range(len(signal)-1):
+            if signal[i] is not signal[i + 1]:
+                m_changes.append(i)
+
+        if m_changes == self.mchanges_prev:
+            return
+        self.mchanges_prev = m_changes
+        m_periods = [(m_changes[i + 1] - m_changes[i] + 1) * self.inteval * 1000 for i in range(len(m_changes) - 1)]
+        median_period = np.median(m_periods)
+        # print('recog thread delta {}, mean {}, median {}'.format(m_periods, np.mean(m_periods), median_period))
+        # calculate delay for each period
+        prob_all = [[] for _ in self.pats_q]
+        # prob_periods = dict()
+        mperiods = list()
+
+        # extract features
+        df_p = pd.DataFrame()
+        df_p['mperiod'] = m_periods
+        df_p['id'] = 0
+        print(m_periods)
+        if len(m_periods) > 1:
+            # print(self.feature_ML)
+            # extracted_features = tsfresh.extract_features(df_p, column_id='id',
+            #                                               default_fc_parameters=MinimalFCParameters())
+            extracted_features = self.feature(m_periods)
+            print(self.model_ML.predict([extracted_features]))
+
+
+        # # pats with different delays for current period
+        # for i in range(1, len(m_changes)):
+        #     if i > 0:
+        #         # get probability for all periods. The measured period is the time different between the current tap and the previous tap
+        #         mperiod = int((m_changes[i] - m_changes[i - 1]) * self.inteval * 1000)
+        #         mperiods.append(mperiod)
+        #         prob_period = dict()
+        #         for period in self.pats_baye.keys():
+        #             dpats = self.pats_baye[period]
+        #             try:
+        #                 prob_period[period] = self.model_period.loc[int(mperiod - 200), str(period)] * len(dpats)
+        #             except KeyError:
+        #                 prob_period[period] = 0
+        #         # print(prob_period)
+        #         factor = np.sum([v for k, v in prob_period.items()])
+        #         # get overall probability with delay
+        #         for period in self.pats_baye.keys():
+        #             dpats = self.pats_baye[period]
+        #             prob_period[period] = prob_period[period] / factor
+        #             if len(dpats) == 1:
+        #                 prob_all[dpats[0]].append(prob_period[period])
+        #             else:
+        #                 prob_delay = list()
+        #                 for p in dpats:
+        #                     pat = self.pats_q[p]
+        #                     m_delay = self.measure_delay(m_changes[i], pat)
+        #                     # print(period, m_delay)
+        #                     # m_d[i].append(m_delay)
+        #                     try:
+        #                         prob_delay.append(self.model_delay.loc[int(m_delay + 400), str(period)])
+        #                     except KeyError:
+        #                         prob_delay.append(0)
+        #                     # print(prob_temp, period, p)
+        #                 prob_delay_norm = prob_delay / np.sum(prob_delay)
+        #                 for j, p in enumerate(dpats):
+        #                     prob_all[p].append(prob_period[period] * prob_delay_norm[j])
+        #             # print('period {}, dpats {}, prob_period {},  prob_all {}'.format(period, dpats,
+        #             #                                                     prob_period[period], prob_all))
+        #
+        # # average for all taps
+        # prob_all = [np.mean(x) for x in prob_all]
+        # prob_all = prob_all / np.sum(prob_all)
+        # # print(prob_all)
+        # prob_all_sorted = np.sort(prob_all)
+        # print(prob_all, prob_all_sorted, np.max(prob_all), np.argmax(prob_all))
+        #
+        # if np.max(prob_all) > self.TH:
+        #     # if prob_all_sorted[-1] - prob_all_sorted[-2] > self.TH:
+        #     self.select.set()
+        #     self.target = np.argmax(prob_all)
+        #     # self.target = list(prob_all).index(prob_all_sorted[-1])
+        #     print('recog {}, selected {}'.format(self.algo, self.pats[self.target]))
+
+    def feature(self, mperiods):
+        X = list()
+        X.append(np.max(mperiods))
+        X.append(np.mean(mperiods))
+        X.append(np.median(mperiods))
+        X.append(np.min(mperiods))
+        X.append(np.std(mperiods))
+        X.append(np.sum(mperiods))
+        X.append(np.var(mperiods))
+        return np.array(X)
 
     def quit(self):
         print('stopped')

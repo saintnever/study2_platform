@@ -59,12 +59,12 @@ class MainApplication(tk.Frame):
         # clean when closing the window
         self.w.bind('<Escape>', self.on_closing)
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
-        self.model_period = pd.read_csv('./model/freq_allstudy1.csv')
+        self.model_period = pd.read_csv('./model/period_allstudy1.csv')
         self.model_delay = pd.read_csv('./model/delay_allstudy1.csv')
         self.signal = 0
         self.p = list()
         self.tprev = time.time()
-        self.wins = {'corr3': 3, 'corr10': 5, 'corr15': 5, 'baye3': 2, 'baye10': 5, 'baye15': 6}
+        self.wins = {'corr3': 3, 'corr10': 5, 'corr15': 5, 'baye3': 2, 'baye10': 5, 'baye15': 6, 'ml3': 3, 'ml10': 5, 'ml15': 5}
         self.win = 2
         self.interval = 0.01
         self.sig_queue = None
