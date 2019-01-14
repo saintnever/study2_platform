@@ -40,7 +40,7 @@ class MainApplication(tk.Frame):
         self.pats_status = None
         self.cases = [3, 10, 15]
         # self.recog_typelist = ['corr', 'baye', 'ml']
-        self.recog_typelist = ['baye', 'corr']
+        self.recog_typelist = ['baye']
         self.recog = None
         self.recog_type = None
         self.task_cnt = 0
@@ -59,7 +59,7 @@ class MainApplication(tk.Frame):
         # clean when closing the window
         self.w.bind('<Escape>', self.on_closing)
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
-        self.model_period = pd.read_csv('./model/freq_allstudy1.csv')
+        self.model_period = pd.read_csv('./model/period_allstudy1.csv')
         self.model_delay = pd.read_csv('./model/delay_allstudy1.csv')
         self.signal = 0
         self.p = list()

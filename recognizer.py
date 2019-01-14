@@ -16,7 +16,8 @@ class Recognizer(threading.Thread):
         self.pats_baye = dict()
         self.target = -1
         self.n = n
-        self.THs = {'corr3': 0.5, 'corr10': 0.4, 'corr15': 0.4, 'baye3': 0.7, 'baye10': 0.4, 'baye15': 0.3}
+        # self.THs = {'corr3': 0.5, 'corr10': 0.4, 'corr15': 0.4, 'baye3': 0.7, 'baye10': 0.4, 'baye15': 0.3}
+        self.THs = {'corr3': 0.5, 'corr10': 0.4, 'corr15': 0.4, 'baye3': 0.3, 'baye10': 0.1, 'baye15': 0.05}
         self.wins = {'corr3': 3, 'corr10': 5, 'corr15': 5, 'baye3': 2, 'baye10': 5, 'baye15': 6}
         self.win = 2
         self.TH = 0.5
@@ -36,6 +37,7 @@ class Recognizer(threading.Thread):
             self.model_period = model_period
             self.model_delay = model_delay
         self.init_algo()
+        self.mchanges_prev = None
 
     def init_algo(self):
             # self.model_period = model_period
@@ -117,13 +119,16 @@ class Recognizer(threading.Thread):
 
         m_changes = m_changes[1:]
         m_changes.reverse()
+        if m_changes == self.mchanges_prev:
+            return
+        self.mchanges_prev = m_changes
         # print(m_changes)
         m_periods = [(m_changes[i + 1] - m_changes[i] + 1) * self.inteval * 1000 for i in range(len(m_changes) - 1)]
         # print(m_periods)
         # match study1 to average consecutive periods
-        if len(m_periods) > 1:
-            m_periods = [(m_periods[i + 1] + m_periods[i]) / 2.0 for i in range(len(m_periods) - 1)]
-        # median_period = np.median(m_periods)
+        # if len(m_periods) > 1:
+        #     m_periods = [(m_periods[i + 1] + m_periods[i]) / 2.0 for i in range(len(m_periods) - 1)]
+        median_period = np.median(m_periods)
         # print('recog thread delta {}, mean {}, median {}'.format(m_periods, np.mean(m_periods), median_period))
         # calculate delay for each period
         prob_all = [0] * self.n
@@ -186,10 +191,14 @@ class Recognizer(threading.Thread):
         # select target
         prob_all = prob_all / np.sum(prob_all)
         # print(prob_all, np.max(prob_all), np.argmax(prob_all))
-        # print(prob_periods, prob_all)
-        if np.max(prob_all) > self.TH:
+
+        prob_all_sorted = np.sort(prob_all)
+        print(prob_periods, prob_all, prob_all_sorted)
+        # if np.max(prob_all) > self.TH:
+        if prob_all_sorted[-1] - prob_all_sorted[-2] > self.TH:
             self.select.set()
-            self.target = np.argmax(prob_all)
+            # self.target = np.argmax(prob_all)
+            self.target= list(prob_all).index(prob_all_sorted[-1])
             print('recog {}, selected {}'.format(self.algo, self.pats[self.target]))
 
     def measure_delay(self, iperiod, pat):
