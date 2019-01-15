@@ -40,13 +40,15 @@ class MainApplication(tk.Frame):
         self.pats_status = None
         self.cases = [3, 10, 15]
         # self.recog_typelist = ['corr', 'baye', 'ml']
-        self.recog_typelist = ['baye']
+        self.recog_typelist = ['corr', 'baye']
         self.recog = None
         self.recog_type = None
         self.task_cnt = 0
         self.session_cnt = 0
         self.rest_cnt = 20
         self.seq = []
+        self.id = tk.StringVar()
+
         # create canvas
         self.w = tk.Canvas(self.root, width=self.winsize[0], height=self.winsize[1])
         self.w.pack()
@@ -70,6 +72,20 @@ class MainApplication(tk.Frame):
         self.sig_queue = None
         self.pat_queues = list()
         self.task_time = 0
+        self.L1 = None
+        self.E1 = None
+
+        self.id_input()
+
+    def id_input(self):
+        self.L1 = tk.Label(self.root, text='Your Student ID:')
+        # L1.pack(side=tk.LEFT)
+        # E1 = tk.Entry(self.root, bd=5)
+        # E1.pack(side=tk.RIGHT)
+        self.E1 = tk.Entry(self.root, bd=5, textvariable=self.id)
+        self.E1.bind('<Return>', self.selection_task)
+        self.w.create_window(50, 50, window=self.L1, anchor='center', tags=('id', ))
+        self.w.create_window(200, 50, window=self.E1, anchor='center', tags=('id', ))
 
     def set_winsize(self, win_size):
         self.winsize = win_size
@@ -120,9 +136,6 @@ class MainApplication(tk.Frame):
         self.sig_queue = queue.Queue(maxsize=int(self.win / self.interval))
         self.pat_queues = [queue.Queue(maxsize=int(self.win / self.interval)) for _ in range(self.n)]
         self.task_time = time.time()
-
-    def id_input(self):
-        pass
 
     def selection_task(self, event):
         if self.task_cnt == len(self.cases) * len(self.recog_typelist):
@@ -211,7 +224,7 @@ class MainApplication(tk.Frame):
         if self.select_event.is_set():
             self.stop_event.set()
             self.task_time = time.time() - self.task_time
-            print('the mean is {}, median is {}, duration is {}'.format(np.mean(self.p[1:]), np.median(self.p[1:]), self.task_time))
+            # print('the mean is {}, median is {}, duration is {}'.format(np.mean(self.p[1:]), np.median(self.p[1:]), self.task_time))
             self.selected_interface()
             return
         # update the input signal and pattern display status
@@ -245,6 +258,16 @@ class MainApplication(tk.Frame):
                                                                             self.pats_selected))
 
     def clean_task(self):
+        self.w.focus_set()
+        items = self.w.find_withtag('id')
+        if len(items) > 0:
+            self.L1.destroy()
+            self.E1.destroy()
+            self.id = self.id.get()
+            print(self.id)
+            for item in items:
+                self.w.delete(item)
+
         # terminate the current thread and clear the selected flag
         self.p = list()
         self.stop_event.set()
