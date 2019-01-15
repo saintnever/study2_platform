@@ -10,7 +10,7 @@ import queue
 import pandas as pd
 import time
 import numpy as np
-
+import csv
 
 class MainApplication(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
@@ -38,7 +38,7 @@ class MainApplication(tk.Frame):
         self.select_event = threading.Event()
         self.n = 0
         self.pats_status = None
-        self.cases = [3, 10, 15]
+        self.cases = [3, 9, 15]
         # self.recog_typelist = ['corr', 'baye', 'ml']
         self.recog_typelist = ['corr', 'baye']
         self.recog = None
@@ -66,16 +66,25 @@ class MainApplication(tk.Frame):
         self.signal = 0
         self.p = list()
         self.tprev = time.time()
-        self.wins = {'corr3': 3, 'corr10': 5, 'corr15': 5, 'baye3': 2, 'baye10': 5, 'baye15': 6, 'ml3': 3, 'ml10': 5, 'ml15': 5}
+        self.wins = {'corr3': 3, 'corr10': 5, 'corr9':5 ,'corr15': 5,
+                     'baye3': 2, 'baye9':5, 'baye10': 5, 'baye15': 6}
         self.win = 2
         self.interval = 0.01
         self.sig_queue = None
         self.pat_queues = list()
         self.task_time = 0
+        self.fpress_time = 0
         self.L1 = None
         self.E1 = None
-
         self.id_input()
+        self.df = pd.DataFrame()
+        self.target = None
+        self.pressed = 0
+        self.csvfile = None
+        self.csvwriter = None
+        self.raw_csvwriter = None
+        self.raw_csvfile = None
+        self.raw_row = list()
 
     def id_input(self):
         self.L1 = tk.Label(self.root, text='Your Student ID:')
@@ -115,6 +124,7 @@ class MainApplication(tk.Frame):
         self.pats = pat_set
 
     def task_init(self):
+
         # init the task sequence for current session
         if self.task_cnt == 0:
             for case in self.cases:
@@ -126,6 +136,7 @@ class MainApplication(tk.Frame):
         self.recog_type = self.seq[self.task_cnt][1]
         self.posters_selected = random.sample(self.other_posters, self.n - 1) + [self.target_poster]
         random.shuffle(self.posters_selected)
+        self.target = self.posters_selected.index(self.target_poster)
         for pat in self.pats:
             if len(pat) == self.n:
                 self.pats_selected = pat
@@ -135,7 +146,6 @@ class MainApplication(tk.Frame):
         self.win = self.wins.get(self.recog_type + str(self.n))
         self.sig_queue = queue.Queue(maxsize=int(self.win / self.interval))
         self.pat_queues = [queue.Queue(maxsize=int(self.win / self.interval)) for _ in range(self.n)]
-        self.task_time = time.time()
 
     def selection_task(self, event):
         if self.task_cnt == len(self.cases) * len(self.recog_typelist):
@@ -152,6 +162,7 @@ class MainApplication(tk.Frame):
             self.task_init()
             self.pats_status = [0] * self.n
             print(self.session_cnt, self.task_cnt, self.recog_type)
+            # self.df = pd.DataFrame(columns=['signal'] + ['pat'+str(i) for i in range(self.n)])
             # start new recognizer thread for the new task
             self.stop_event.clear()
             self.recog = Recognizer(self.stop_event, self.select_event, self.sig_queue, self.pat_queues, self.recog_type,
@@ -163,8 +174,8 @@ class MainApplication(tk.Frame):
             for i, item in enumerate(self.w.find_withtag('dot')):
                 # print(self.pats_selected[i], i, item)
                 self.after_handles.append(self.root.after(self.pats_selected[i][1], self.flash, item, i, 0))
+            self.task_time = time.time()
             self.task_cnt += 1
-
             self.check_handles.append(self.root.after(1, self.target_check))
 
     def display(self):
@@ -224,13 +235,27 @@ class MainApplication(tk.Frame):
         if self.select_event.is_set():
             self.stop_event.set()
             self.task_time = time.time() - self.task_time
-            # print('the mean is {}, median is {}, duration is {}'.format(np.mean(self.p[1:]), np.median(self.p[1:]), self.task_time))
+            self.fpress_time = time.time() - self.fpress_time
+            print('the mean is {}, median is {}, duration is {}'.format(np.mean(self.p[1:]), np.median(self.p[1:]), self.task_time))
             self.selected_interface()
+            self.csvwriter.writerow([self.id, self.session_cnt, self.task_cnt-1, self.recog_type, self.n, self.target, self.recog.get_target(), self.task_time, self.fpress_time])
+            # self.df.loc[len(self.df.index)] = [self.id, self.session_cnt, self.task_cnt-1, self.recog_type, self.n, self.target, self.recog.get_target(),
+            #                 self.task_time, self.fpress_time]
+            # print(self.df)
+            rawfile = 'data/raw_'+str(self.id)+'_n'+str(self.n)+'_session'+str(self.session_cnt)+'_task'+\
+                           str(self.task_cnt-1)+'_'+self.recog_type + '_target'+str(self.target)+'_selected'+str(self.recog.get_target())+'.csv'
+            with open(rawfile, 'w', newline='') as file:
+                rawcsvwriter = csv.writer(file, delimiter=',')
+                rawcsvwriter.writerow(['signal'] + ['pat'+str(i) for i in range(self.n)])
+                for row in self.raw_row:
+                    rawcsvwriter.writerow(row)
             return
         # update the input signal and pattern display status
         self.q_put(self.sig_queue, self.signal)
         for q, state in zip(self.pat_queues, self.pats_status):
             self.q_put(q, state)
+        # self.df.loc[len(self.df.index)] = [self.signal] + self.pats_status
+        self.raw_row.append([self.signal] + self.pats_status)
         self.check_handles.append(self.root.after(int(self.interval*1000), self.target_check))
 
     def q_put(self, q, data):
@@ -267,6 +292,9 @@ class MainApplication(tk.Frame):
             print(self.id)
             for item in items:
                 self.w.delete(item)
+            self.csvfile = open('data/'+str(self.id)+'.csv', 'w', newline='')
+            self.csvwriter = csv.writer(self.csvfile, delimiter=',')
+            self.csvwriter.writerow(['user', 'session', 'block', 'recognizer', 'nums', 'target_i', 'index_est', 'ctime', 'ttime'])
 
         # terminate the current thread and clear the selected flag
         self.p = list()
@@ -291,7 +319,8 @@ class MainApplication(tk.Frame):
         if self.rest_text is not None:
             self.w.delete(self.rest_text)
         self.tkimages = []
-        self.task_time = 0
+        # self.df = pd.DataFrame()
+        self.raw_row = list()
         # if self.sig_queue:
         #     with self.sig_queue.mutex:
         #         del self.sig_queue
@@ -319,6 +348,9 @@ class MainApplication(tk.Frame):
             self.rest_handles.append(self.root.after(1000, self.rest))
 
     def space_pressed(self, event):
+        self.pressed += 1
+        if self.pressed == 1:
+            self.fpress_time = time.time()
         if self.signal == 0:
             self.p.append(time.time() - self.tprev)
             # print("pressed, time delta is {}".format(time.time() - self.tprev))
@@ -342,17 +374,17 @@ class MainApplication(tk.Frame):
     def _on_closing(self):
         print('CLOSING THE WINDOW...')
         self.clean_task()
-
         self.clean_session()
+        self.csvfile.close()
         self.root.destroy()
 
 
-periods_init = [[300, 450, 650], [300, 350, 400, 500, 600, 700], [300, 350, 400, 450, 500, 600, 600, 700, 700],
+periods_init = [[300, 450, 650], [300, 350, 400, 500, 600, 700], [300, 350, 400, 450, 500, 550, 600, 650, 700],
                 [300, 350, 400, 450, 500, 550, 600, 650, 700, 700],
                 [300, 350, 400, 450, 500, 550, 550, 600, 600, 650, 650, 650, 700, 700, 700],
                 [300, 350, 350, 400, 400, 450, 450, 500, 500, 550, 550, 600, 600, 650, 650, 650, 700, 700]]
 
-delays_init = [[0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 396, 0, 433],
+delays_init = [[0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0],
                [0, 0, 0, 0, 0, 0, 0, 0, 0, 467],
                [0, 0, 0, 0, 0, 0, 367, 0, 400, 0, 216, 433, 0, 233, 467],
                [0, 0, 175, 0, 200, 0, 225, 0, 320, 0, 362, 0, 396, 0, 198, 396, 0, 433]]

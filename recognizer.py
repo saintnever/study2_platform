@@ -19,16 +19,18 @@ class Recognizer(threading.Thread):
         self.pats_baye = dict()
         self.target = -1
         self.n = n
-        self.THs = {'corr3': 0.5, 'corr10': 0.4, 'corr15': 0.4, 'baye3': 0.7, 'baye10': 0.3, 'baye15': 0.3}
+        self.THs = {'corr3': 0.5, 'corr10': 0.4, 'corr15': 0.4, 'corr9': 0.4,
+                    'baye3': 0.7, 'baye10': 0.3, 'baye15': 0.2, 'baye9': 0.4}
         # self.THs = {'corr3': 0.5, 'corr10': 0.4, 'corr15': 0.4, 'baye3': 1.0/3, 'baye10': 1.0/10, 'baye15': 1.0/20}
-        self.wins = {'corr3': 3, 'corr10': 5, 'corr15': 5, 'baye3': 2, 'baye10': 5, 'baye15': 6}
+        self.wins = {'corr3': 3, 'corr10': 5, 'corr9': 5, 'corr15': 5,
+                     'baye3': 2, 'baye9': 5, 'baye10': 5, 'baye15': 6}
         self.win = 2
         self.TH = 0.5
         if self.algo + str(self.n) in self.THs.keys():
             self.win = self.wins.get(self.algo + str(self.n))
             self.TH = self.THs.get(self.algo + str(self.n))
             print(self.win, self.TH, self.n)
-        self.inteval = interval  # in second
+        self.inteval = interval + 0.0002  # in second. add residue time to match timed from main thread
         self.win_n = int(self.win / self.inteval)
         self.step = self.inteval
         self.pats_status = [0 for _ in range(self.n)]
@@ -46,6 +48,7 @@ class Recognizer(threading.Thread):
             with open('features.pickle', 'rb') as file:
                 self.feature_ML = pickle.load(file)
         self.init_algo()
+        self.timer = time.time()
 
     def init_algo(self):
             # self.model_period = model_period
@@ -67,6 +70,8 @@ class Recognizer(threading.Thread):
     def run(self):
         data, status = -1, []
         while not self.stopped.is_set():
+            if time.time() - self.timer > 20:
+                self.stopped.set()
             # get input queue and start recog for current win
             try:
                 self.sigs_q.append(self.data_queue.get(timeout=1))
@@ -97,7 +102,7 @@ class Recognizer(threading.Thread):
         probs = list()
         for pat in self.pats_q:
             # probs.append(abs(np.corrcoef(signal, pat[-self.win_n:])[0][1]))
-            probs.append(np.corrcoef(signal, pat[-self.win_n:])[0][1])
+            probs.append(abs(np.corrcoef(signal, pat[-self.win_n:])[0][1]))
 
         # select target
         if np.max(probs) > self.TH:
@@ -106,6 +111,7 @@ class Recognizer(threading.Thread):
             print('recog {}, selected {}'.format(self.algo, self.pats[self.target]))
 
     def recog_baye(self):
+        t_start = time.time()
         signal = self.sigs_q
         # print(signal)
         m_changes = list()
@@ -115,7 +121,6 @@ class Recognizer(threading.Thread):
                 if signal[-i] is not self.sigs_q[-(i+1)]:
                     m_changes.append(len(self.sigs_q) - i)
                     if i > self.win_n:
-                    # if i < 0:
                         break
                 i += 1
             except IndexError:
@@ -126,8 +131,8 @@ class Recognizer(threading.Thread):
         if m_changes == self.mchanges_prev:
             return
         self.mchanges_prev = m_changes
-        m_periods = [(m_changes[i + 1] - m_changes[i] + 1) * self.inteval * 1000 for i in range(len(m_changes) - 1)]
-        median_period = np.median(m_periods)
+        # m_periods = [(m_changes[i + 1] - m_changes[i] + 1) * self.inteval * 1000 for i in range(len(m_changes) - 1)]
+        # median_period = np.median(m_periods)
         # calculate delay for each period
         prob_all = [[] for _ in self.pats_q]
         # prob_periods = dict()
@@ -172,21 +177,21 @@ class Recognizer(threading.Thread):
                         prob_all[p].append(prob_period[period] * prob_delay_norm[j])
                 # print('period {}, dpats {}, prob_period {},  prob_all {}'.format(period, dpats,
                 #                                                     prob_period[period], prob_all))
-        # print('recog thread delta {}, mean {}, median {}'.format(m_periods, np.mean(m_periods), median_period))
+        print('recog thread delta {}, mean {}, median {}'.format(m_periods, np.mean(m_periods), np.median(m_periods)))
 
         # average for all taps
         prob_all = [np.mean(x) for x in prob_all]
         prob_all = prob_all / np.sum(prob_all)
         # print(prob_all)
-        prob_all_sorted = np.sort(prob_all)
+        # prob_all_sorted = np.sort(prob_all)
         # print(prob_all, prob_all_sorted, np.max(prob_all), np.argmax(prob_all))
-
         if np.max(prob_all) > self.TH:
         # if prob_all_sorted[-1] - prob_all_sorted[-2] > self.TH:
             self.select.set()
             self.target = np.argmax(prob_all)
             # self.target = list(prob_all).index(prob_all_sorted[-1])
             print('recog {}, selected {}'.format(self.algo, self.pats[self.target]))
+        print('recog time is {}'.format(time.time() - t_start))
 
     def measure_delay(self, iperiod, pat):
         pidx = nidx = iperiod
