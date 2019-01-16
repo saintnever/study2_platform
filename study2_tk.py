@@ -12,6 +12,10 @@ import time
 import numpy as np
 import csv
 import os
+from pyfirmata import ArduinoMega, util
+import time
+import pyfirmata
+
 
 class MainApplication(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
@@ -41,7 +45,7 @@ class MainApplication(tk.Frame):
         self.pats_status = None
         self.cases = [3, 9, 15]
         # self.recog_typelist = ['corr', 'baye', 'ml']
-        self.recog_typelist = ['corr', 'baye']
+        self.recog_typelist = ['corr']
         self.recog = None
         self.recog_type = None
         self.task_cnt = 0
@@ -88,6 +92,11 @@ class MainApplication(tk.Frame):
         self.raw_csvwriter = None
         self.raw_csvfile = None
         self.raw_row = list()
+        self.board = ArduinoMega('COM29')
+        self.board.analog[0].mode = pyfirmata.INPUT
+        self.it = util.Iterator(self.board)
+        self.it.start()
+        self.board.analog[0].enable_reporting()
 
     def id_input(self):
         self.L1 = tk.Label(self.root, text='Your Student ID:')
@@ -257,6 +266,14 @@ class MainApplication(tk.Frame):
                     rawcsvwriter.writerow(row)
             return
         # update the input signal and pattern display status
+        sig = self.board.analog[0].read()
+
+        if sig and sig > 0.01:
+            self.signal = 1
+        else:
+            self.signal = 0
+
+        print(sig, self.signal)
         self.q_put(self.sig_queue, self.signal)
         for q, state in zip(self.pat_queues, self.pats_status):
             self.q_put(q, state)
@@ -382,6 +399,8 @@ class MainApplication(tk.Frame):
         self.clean_task()
         self.clean_session()
         self.csvfile.close()
+        self.it.join()
+        self.it.remove()
         self.root.destroy()
 
 
