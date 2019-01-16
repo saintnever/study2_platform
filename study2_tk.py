@@ -11,6 +11,7 @@ import pandas as pd
 import time
 import numpy as np
 import csv
+import os
 
 class MainApplication(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
@@ -66,8 +67,8 @@ class MainApplication(tk.Frame):
         self.signal = 0
         self.p = list()
         self.tprev = time.time()
-        self.wins = {'corr3': 3, 'corr10': 5, 'corr9':5 ,'corr15': 5,
-                     'baye3': 2, 'baye9':5, 'baye10': 5, 'baye15': 6}
+        self.wins = {'corr3': 3, 'corr9': 5, 'corr10': 5, 'corr15': 5,
+                     'baye3': 2, 'baye9': 5, 'baye10': 5, 'baye15': 6}
         self.win = 2
         self.interval = 0.01
         self.sig_queue = None
@@ -242,7 +243,10 @@ class MainApplication(tk.Frame):
             # self.df.loc[len(self.df.index)] = [self.id, self.session_cnt, self.task_cnt-1, self.recog_type, self.n, self.target, self.recog.get_target(),
             #                 self.task_time, self.fpress_time]
             # print(self.df)
-            rawfile = 'data/raw_'+str(self.id)+'_n'+str(self.n)+'_session'+str(self.session_cnt)+'_task'+\
+            directory = './data/'+str(self.id)
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+            rawfile = directory +'/n'+str(self.n)+'_session'+str(self.session_cnt)+'_task'+\
                            str(self.task_cnt-1)+'_'+self.recog_type + '_target'+str(self.target)+'_selected'+str(self.recog.get_target())+'.csv'
             with open(rawfile, 'w', newline='') as file:
                 rawcsvwriter = csv.writer(file, delimiter=',')
