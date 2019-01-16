@@ -10,7 +10,7 @@ import pickle
 
 
 class Recognizer(threading.Thread):
-    def __init__(self, stop_event, select_event, sig_queue, pat_queues, algo, n, interval, pats, model_period, model_delay):
+    def __init__(self, stop_event, select_event, sig_queue, pat_queues, algo, n, interval, pats, model_period, model_delay, wins, THs):
         threading.Thread.__init__(self)
         self.algo = algo
         self.stopped = stop_event
@@ -19,11 +19,13 @@ class Recognizer(threading.Thread):
         self.pats_baye = dict()
         self.target = -1
         self.n = n
-        self.THs = {'corr3': 0.5, 'corr10': 0.4, 'corr15': 0.4, 'corr9': 0.4,
-                    'baye3': 0.7, 'baye10': 0.3, 'baye15': 0.3, 'baye9': 0.4}
+        self.wins = wins
+        self.THs = THs
+        # self.THs = {'corr3': 0.5, 'corr9': 0.4, 'corr10': 0.4, 'corr15': 0.4,
+        #             'baye3': 0.7, 'baye9': 0.4, 'baye10': 0.3, 'baye15': 0.3}
         # self.THs = {'corr3': 0.5, 'corr10': 0.4, 'corr15': 0.4, 'baye3': 1.0/3, 'baye10': 1.0/10, 'baye15': 1.0/20}
-        self.wins = {'corr3': 3, 'corr10': 5, 'corr9': 5, 'corr15': 5,
-                     'baye3': 2, 'baye9': 5, 'baye10': 5, 'baye15': 6}
+        # self.wins = {'corr3': 3, 'corr10': 5, 'corr9': 5, 'corr15': 5,
+        #              'baye3': 2, 'baye9': 5, 'baye10': 5, 'baye15': 6}
         self.win = 2
         self.TH = 0.5
         if self.algo + str(self.n) in self.THs.keys():

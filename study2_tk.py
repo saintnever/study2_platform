@@ -67,8 +67,10 @@ class MainApplication(tk.Frame):
         self.signal = 0
         self.p = list()
         self.tprev = time.time()
-        self.wins = {'corr3': 3, 'corr9': 5, 'corr10': 5, 'corr15': 5,
-                     'baye3': 2, 'baye9': 5, 'baye10': 5, 'baye15': 6}
+        self.wins = {'corr3': 3, 'corr9': 5, 'corr10': 5, 'corr15': 6,
+                     'baye3': 2, 'baye9': 4, 'baye10': 5, 'baye15': 6}
+        self.THs = {'corr3': 0.5, 'corr9': 0.4, 'corr10': 0.2, 'corr15': 0.3,
+                    'baye3': 0.7, 'baye9': 0.5, 'baye10': 0.4, 'baye15': 0.1}
         self.win = 2
         self.interval = 0.01
         self.sig_queue = None
@@ -167,7 +169,7 @@ class MainApplication(tk.Frame):
             # start new recognizer thread for the new task
             self.stop_event.clear()
             self.recog = Recognizer(self.stop_event, self.select_event, self.sig_queue, self.pat_queues, self.recog_type,
-                                    self.n, self.interval, self.pats_selected, self.model_period, self.model_delay)
+                                    self.n, self.interval, self.pats_selected, self.model_period, self.model_delay, self.wins, self.THs)
             self.recog.start()
             # draw the posters and dots
             self.display()
