@@ -15,7 +15,7 @@ import os
 
 
 class MainApplication(tk.Frame):
-    def __init__(self, parent, *args, **kwargs):
+    def __init__(self, parent, n_pats, *args, **kwargs):
         tk.Frame.__init__(self, parent, *args, **kwargs)
         self.root = parent
         self.width = self.winfo_screenwidth()
@@ -42,7 +42,7 @@ class MainApplication(tk.Frame):
         self.select_event = threading.Event()
         self.n = 0
         self.pats_status = None
-        self.cases = [3, 9, 15]
+        self.cases = n_pats
         # self.recog_typelist = ['corr', 'baye', 'ml']
         self.recog_typelist = ['corr', 'baye']
         self.recog = None
@@ -70,10 +70,10 @@ class MainApplication(tk.Frame):
         self.signal = 0
         self.p = list()
         self.tprev = time.time()
-        self.wins = {'corr3': 3, 'corr9': 5, 'corr10': 5, 'corr15': 6, 'corr21':7,
+        self.wins = {'corr3': 2, 'corr9': 5, 'corr10': 5, 'corr15': 6, 'corr21':7,
                      'baye3': 2, 'baye9': 4, 'baye10': 5, 'baye15': 6, 'baye21':7}
-        self.THs = {'corr3': 0.5, 'corr9': 0.4, 'corr10': 0.2, 'corr15': 0.3, 'corr21':0.2,
-                    'baye3': 0.7, 'baye9': 0.5, 'baye10': 0.4, 'baye15': 0.1, 'baye21':0.2}
+        self.THs = {'corr3': 0.5, 'corr9': 0.4, 'corr10': 0.2, 'corr15': 0.3, 'corr21': 0.3,
+                    'baye3': 0.6, 'baye9': 0.5, 'baye10': 0.4, 'baye15': 0.1, 'baye21': 0.2}
         self.win = 2
         self.interval = 0.01
         self.sig_queue = None
@@ -91,6 +91,7 @@ class MainApplication(tk.Frame):
         self.raw_csvwriter = None
         self.raw_csvfile = None
         self.raw_row = list()
+        self.rest_flag = 0
 
     def id_input(self):
         self.L1 = tk.Label(self.root, text='Your Student ID:')
@@ -163,10 +164,19 @@ class MainApplication(tk.Frame):
             # clean from previous task
             self.clean_task()
             self.clean_session()
+            self.rest_cnt = 60
             self.rest_text = self.w.create_text(int(self.width / 2), int(self.height / 2), anchor='center',
                                                 fill='orange', font=("Microsoft YaHei", 50),
-                                                text='Remaining rest time {}s'.format(self.rest_cnt))
+                                                text='Remaining rest time {}s'.format(self.rest_cnt), tags=('text', ))
             self.rest_handles.append(self.root.after(1, self.rest))
+        elif self.task_cnt % 6 == 0 and self.task_cnt > 0 and self.rest_flag == 0:
+            self.clean_task()
+            self.rest_cnt = 30
+            self.rest_text = self.w.create_text(int(self.width / 2), int(self.height / 2), anchor='center',
+                                                fill='orange', font=("Microsoft YaHei", 50),
+                                                text='Remaining rest time {}s'.format(self.rest_cnt), tags=('text', ))
+            self.rest_handles.append(self.root.after(1, self.rest_within))
+            self.rest_flag = 1
         else:
             # clean from previous task
             self.clean_task()
@@ -301,6 +311,7 @@ class MainApplication(tk.Frame):
                                                                             self.pats_selected))
 
     def clean_task(self):
+        self.rest_flag = 0
         self.w.focus_set()
         items = self.w.find_withtag('id')
         if len(items) > 0:
@@ -334,8 +345,14 @@ class MainApplication(tk.Frame):
             # delete can only take one item at a time
             for item in items:
                 self.w.delete(item)
-        if self.rest_text is not None:
-            self.w.delete(self.rest_text)
+
+        items = self.w.find_withtag('text')
+        if len(items) > 0:
+            # delete can only take one item at a time
+            for item in items:
+                self.w.delete(item)
+        # if self.rest_text is not None:
+        #     self.w.delete(self.rest_text)
         self.tkimages = []
         # self.df = pd.DataFrame()
         self.raw_row = list()
@@ -364,6 +381,15 @@ class MainApplication(tk.Frame):
         else:
             self.rest_cnt -= 1
             self.rest_handles.append(self.root.after(1000, self.rest))
+
+    def rest_within(self):
+        self.w.itemconfigure(self.rest_text,
+                             text='Remaining rest time {}s'.format(self.rest_cnt))
+        if self.rest_cnt == 0:
+            self.w.itemconfigure(self.rest_text, text='Press RETURN to start!')
+        else:
+            self.rest_cnt -= 1
+            self.rest_handles.append(self.root.after(1000, self.rest_within))
 
     def space_pressed(self, event):
         self.pressed += 1
@@ -418,6 +444,13 @@ all_pats = [[300, 0], [350, 0], [350, 175], [400, 0], [400, 200], [450, 0], [450
             [550, 0], [550, 183], [550, 367], [600, 0], [600, 200], [600, 400], [650, 0], [650, 216], [650, 433],
             [700, 0], [700, 233], [700, 467]]
 
+pats_rand = [[[500, 0], [650, 433], [650, 216]],
+             [[300, 0], [350, 175], [400, 200], [500, 167], [550, 183], [600, 400], [650, 433], [700, 0], [700, 467]],
+             [[350, 175], [400, 0], [450, 225], [500, 0], [500, 167], [550, 367], [550, 0], [600, 400], [600, 0], [600, 200],
+              [650, 216], [650, 433], [650, 0], [700, 0], [700, 233]],
+             [[300, 0], [350, 175], [350, 0], [400, 200], [400, 0], [450, 0], [450, 225], [500, 333], [500, 0], [500, 167],
+              [550, 0], [550, 367], [550, 183], [600, 0], [600, 200], [600, 400], [650, 433], [650, 0], [650, 216], [700, 467], [700, 0]]]
+
 select_flag = -1
 
 
@@ -443,21 +476,21 @@ def randpat_get(all_pats, n_pats):
 if __name__ == '__main__':
     # create window with background picture
     root = tk.Tk()
-    root.attributes("-fullscreen", False)
+    root.attributes("-fullscreen", True)
     # win_size = (1920, 1080)
-    app = MainApplication(root)
-    app.set_winsize((1680, 1050))
+    n_pats = [3, 9, 15, 21]
+    app = MainApplication(root, n_pats)
+    # app.set_winsize((1680, 1050))
     bg_file = "./photo/bg.jpg"
     app.set_background(bg_file)
 
     # pass in poster filenames and blinking patterns
-    poster_files = ["./photo/" + str(i) + ".jpeg" for i in range(15)]
+    poster_files = ["./photo/" + str(i) + ".jpeg" for i in range(21)]
     app.set_posters(poster_files)
-    n_pats = [3, 9, 15]
     pats_opt = pats_gen(periods_optimized, delays_optimized, n_pats)
     pats_worst = pats_gen(periods_worst, delays_worst, n_pats)
-    pats_rand = randpat_get(all_pats, n_pats)
-    print(pats_rand)
+    # pats_rand = randpat_get(all_pats, n_pats)
+    # print(pats_rand)
     app.set_pats(pats_opt, pats_worst, pats_rand)
     #
     # start mainloop
