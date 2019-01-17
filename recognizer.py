@@ -72,8 +72,9 @@ class Recognizer(threading.Thread):
     def run(self):
         data, status = -1, []
         while not self.stopped.is_set():
-            if time.time() - self.timer > 20:
-                self.stopped.set()
+            # print(time.time() - self.timer)
+            if time.time() - self.timer > 15:
+                self.select.set()
             # get input queue and start recog for current win
             try:
                 self.sigs_q.append(self.data_queue.get(timeout=1))
@@ -249,6 +250,7 @@ class Recognizer(threading.Thread):
         return np.array(X)
 
     def quit(self):
+        self.timer = 0
         print('stopped')
         # if self.data_queue:
         #     with self.data_queue.mutex:

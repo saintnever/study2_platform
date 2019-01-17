@@ -50,7 +50,6 @@ class MainApplication(tk.Frame):
         self.task_cnt = 0
         self.session_cnt = 0
         self.rest_cnt = 20
-        self.seq = []
         self.id = tk.StringVar()
 
         # create canvas
@@ -72,8 +71,8 @@ class MainApplication(tk.Frame):
         self.tprev = time.time()
         self.wins = {'corr3': 2, 'corr9': 5, 'corr10': 5, 'corr15': 7, 'corr21':7,
                      'baye3': 2, 'baye9': 5, 'baye10': 5, 'baye15': 6, 'baye21':7}
-        self.THs = {'corr3': 0.3, 'corr9': 0.2, 'corr10': 0.2, 'corr15': 0.2, 'corr21': 0.3,
-                    'baye3': 0.4, 'baye9': 0.4, 'baye10': 0.4, 'baye15': 0.3, 'baye21': 0.2}
+        self.THs = {'corr3': 0.4, 'corr9': 0.2, 'corr10': 0.2, 'corr15': 0.2, 'corr21': 0.3,
+                    'baye3': 0.6, 'baye9': 0.4, 'baye10': 0.4, 'baye15': 0.3, 'baye21': 0.2}
         self.win = 2
         self.interval = 0.01
         self.sig_queue = None
@@ -92,6 +91,9 @@ class MainApplication(tk.Frame):
         self.raw_csvfile = None
         self.raw_row = list()
         self.rest_flag = 0
+        self.preposters = list()
+        self.seq = []
+
 
     def id_input(self):
         self.L1 = tk.Label(self.root, text='Your Student ID:')
@@ -137,17 +139,36 @@ class MainApplication(tk.Frame):
         # init the task sequence for current session
         if self.task_cnt == 0:
             for case in self.cases:
-                for rcog in self.recog_typelist:
-                    for pats in self.pats_dict.keys():
-                        self.seq.append([case, rcog, pats])
+                for pats in self.pats_dict.keys():
+                    self.seq.append([case, pats])
             random.shuffle(self.seq)
-        # assign n and recognizer type for current task
-        self.n = self.seq[self.task_cnt][0]
-        self.recog_type = self.seq[self.task_cnt][1]
-        self.pat_type = self.seq[self.task_cnt][2]
-        self.pats = self.pats_dict[self.pat_type]
-        self.posters_selected = random.sample(self.other_posters, self.n - 1) + [self.target_poster]
-        random.shuffle(self.posters_selected)
+            random.shuffle(self.recog_typelist)
+
+        if self.task_cnt < len(self.seq):
+            # assign n and recognizer type for current task
+            self.n = self.seq[self.task_cnt][0]
+            # self.recog_type = self.seq[self.task_cnt][1]
+            self.pat_type = self.seq[self.task_cnt][1]
+            self.pats = self.pats_dict[self.pat_type]
+            self.posters_selected = random.sample(self.other_posters, self.n - 1) + [self.target_poster]
+            random.shuffle(self.posters_selected)
+            self.preposters.append(self.posters_selected)
+            self.recog_type = self.recog_typelist[0]
+        else:
+            nn = len(self.seq)
+            if self.task_cnt == nn:
+                # assign n and recognizer type for current task
+                for i, item in enumerate(self.seq):
+                    item.append(self.preposters[i])
+                random.shuffle(self.seq)
+            self.n = self.seq[self.task_cnt - nn][0]
+            # self.recog_type = self.seq[self.task_cnt][1]
+            self.pat_type = self.seq[self.task_cnt - nn][1]
+            self.pats = self.pats_dict[self.pat_type]
+            # random.shuffle(self.preposters)
+            self.posters_selected = self.seq[self.task_cnt - nn][2]
+            self.recog_type = self.recog_typelist[1]
+        # print(self.pats, self.seq, len(self.posters_selected))
         self.target = self.posters_selected.index(self.target_poster)
         for pat in self.pats:
             if len(pat) == self.n:
@@ -166,15 +187,13 @@ class MainApplication(tk.Frame):
             self.clean_session()
             self.rest_cnt = 60
             self.rest_text = self.w.create_text(int(self.width / 2), int(self.height / 2), anchor='center',
-                                                fill='orange', font=("Microsoft YaHei", 50),
-                                                text='Remaining rest time {}s'.format(self.rest_cnt), tags=('text', ))
+                                                fill='orange', font=("Microsoft YaHei", 50), tags=('text', ))
             self.rest_handles.append(self.root.after(1, self.rest))
         elif self.task_cnt % 6 == 0 and self.task_cnt > 0 and self.rest_flag == 0:
             self.clean_task()
             self.rest_cnt = 30
             self.rest_text = self.w.create_text(int(self.width / 2), int(self.height / 2), anchor='center',
-                                                fill='orange', font=("Microsoft YaHei", 50),
-                                                text='Remaining rest time {}s'.format(self.rest_cnt), tags=('text', ))
+                                                fill='orange', font=("Microsoft YaHei", 50), tags=('text', ))
             self.rest_handles.append(self.root.after(1, self.rest_within))
             self.rest_flag = 1
         else:
@@ -188,6 +207,7 @@ class MainApplication(tk.Frame):
             self.stop_event.clear()
             self.recog = Recognizer(self.stop_event, self.select_event, self.sig_queue, self.pat_queues, self.recog_type,
                                     self.n, self.interval, self.pats_selected, self.model_period, self.model_delay, self.wins, self.THs)
+
             self.recog.start()
             # draw the posters and dots
             self.display()
@@ -245,14 +265,15 @@ class MainApplication(tk.Frame):
 
     def selected_interface(self):
         target_i = self.recog.get_target()
-        target_poster = self.w.find_withtag(str(target_i) + '_poster')
-        target_pos = self.w.coords(target_poster)
-        rect_ltx = target_pos[0] - int(self.image_size[0] / 2)
-        rect_lty = target_pos[1] - int(self.image_size[1] / 2)
-        rect_rbx = target_pos[0] + int(self.image_size[0] / 2)
-        rect_rby = target_pos[1] + int(self.image_size[1] / 2)
-        self.w.create_rectangle(rect_ltx, rect_lty, rect_rbx, rect_rby, fill='', outline='cyan', width=10,
-                                tag=('select',))
+        if target_i != -1:
+            target_poster = self.w.find_withtag(str(target_i) + '_poster')
+            target_pos = self.w.coords(target_poster)
+            rect_ltx = target_pos[0] - int(self.image_size[0] / 2)
+            rect_lty = target_pos[1] - int(self.image_size[1] / 2)
+            rect_rbx = target_pos[0] + int(self.image_size[0] / 2)
+            rect_rby = target_pos[1] + int(self.image_size[1] / 2)
+            self.w.create_rectangle(rect_ltx, rect_lty, rect_rbx, rect_rby, fill='', outline='cyan', width=10,
+                                    tag=('select',))
 
     def target_check(self):
         if self.select_event.is_set():
@@ -260,6 +281,7 @@ class MainApplication(tk.Frame):
             self.task_time = time.time() - self.task_time
             self.fpress_time = time.time() - self.fpress_time
             print('the mean is {}, median is {}, duration is {}'.format(np.mean(self.p[1:]), np.median(self.p[1:]), self.task_time))
+            print('pat_type is {}'.format(self.pat_type))
             self.selected_interface()
             self.csvwriter.writerow([self.id, self.session_cnt, self.task_cnt-1, self.recog_type, self.pat_type, self.n,
                                      self.target, self.recog.get_target(), self.task_time, self.fpress_time])
@@ -279,9 +301,10 @@ class MainApplication(tk.Frame):
                     rawcsvwriter.writerow(row)
             return
         # update the input signal and pattern display status
-        self.q_put(self.sig_queue, self.signal)
-        for q, state in zip(self.pat_queues, self.pats_status):
-            self.q_put(q, state)
+        if self.pressed > 0:
+            self.q_put(self.sig_queue, self.signal)
+            for q, state in zip(self.pat_queues, self.pats_status):
+                self.q_put(q, state)
         # self.df.loc[len(self.df.index)] = [self.signal] + self.pats_status
         self.raw_row.append([self.signal] + self.pats_status)
         self.check_handles.append(self.root.after(int(self.interval*1000), self.target_check))
@@ -311,6 +334,7 @@ class MainApplication(tk.Frame):
                                                                             self.pats_selected))
 
     def clean_task(self):
+        self.pressed = 0
         self.rest_flag = 0
         self.w.focus_set()
         items = self.w.find_withtag('id')
@@ -368,6 +392,7 @@ class MainApplication(tk.Frame):
             for handle in self.rest_handles:
                 self.root.after_cancel(handle)
         self.seq = []
+        self.preposters = []
         self.task_cnt = 0
         self.session_cnt += 1
         self.rest_cnt = 20
@@ -477,7 +502,6 @@ if __name__ == '__main__':
     # create window with background picture
     root = tk.Tk()
     root.attributes("-fullscreen", True)
-    # win_size = (1920, 1080)
     n_pats = [3, 9, 15, 21]
     app = MainApplication(root, n_pats)
     # app.set_winsize((1680, 1050))
