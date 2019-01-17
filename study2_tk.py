@@ -70,10 +70,10 @@ class MainApplication(tk.Frame):
         self.signal = 0
         self.p = list()
         self.tprev = time.time()
-        self.wins = {'corr3': 2, 'corr9': 5, 'corr10': 5, 'corr15': 6, 'corr21':7,
-                     'baye3': 2, 'baye9': 4, 'baye10': 5, 'baye15': 6, 'baye21':7}
-        self.THs = {'corr3': 0.5, 'corr9': 0.4, 'corr10': 0.2, 'corr15': 0.3, 'corr21': 0.3,
-                    'baye3': 0.6, 'baye9': 0.5, 'baye10': 0.4, 'baye15': 0.1, 'baye21': 0.2}
+        self.wins = {'corr3': 2, 'corr9': 5, 'corr10': 5, 'corr15': 7, 'corr21':7,
+                     'baye3': 2, 'baye9': 5, 'baye10': 5, 'baye15': 6, 'baye21':7}
+        self.THs = {'corr3': 0.3, 'corr9': 0.2, 'corr10': 0.2, 'corr15': 0.2, 'corr21': 0.3,
+                    'baye3': 0.4, 'baye9': 0.4, 'baye10': 0.4, 'baye15': 0.3, 'baye21': 0.2}
         self.win = 2
         self.interval = 0.01
         self.sig_queue = None
