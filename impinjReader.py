@@ -9,7 +9,7 @@ import pickle
 
 
 class ImpinjReader(threading.Thread):
-    def __init__(self, stop_event, dataq, sig):
+    def __init__(self, stop_event, sig):
         threading.Thread.__init__(self)
         self.stopped = stop_event
         self.signal = sig
@@ -19,15 +19,18 @@ class ImpinjReader(threading.Thread):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.connect((self.TCP_IP, self.TCP_PORT))
         print("connected: ", self.s)
-        self.dataq = dataq
+        # self.dataq = dataq
         self.tag = 'E20000193907006713102965'
 
     def run(self):
         while not self.stopped.is_set():
             data = self.s.recv(self.BUFFER_SIZE).decode("utf-8").split(',')
-            self.dataq.put([data[4], data[5]])
-            self.signal = data[5]
+            # self.dataq.put(data[5])
+            self.signal = float(data[5])
         self.s.close()
+
+    def get_signal(self):
+        return self.signal
 
 
 if __name__ == '__main__':

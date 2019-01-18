@@ -102,6 +102,7 @@ class Recognizer(threading.Thread):
         # if np.sum(signal) == 0 and np.sum(signal) == len(signal) and np.sum(pat) == 0 and np.sum(pat) == len(pat):
         #     return 0
         signal = self.sigs_q[-self.win_n:]
+        print(signal[-10:])
         probs = list()
         for pat in self.pats_q:
             # probs.append(abs(np.corrcoef(signal, pat[-self.win_n:])[0][1]))

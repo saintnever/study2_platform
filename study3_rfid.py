@@ -45,7 +45,7 @@ class MainApplication(tk.Frame):
         self.pats_status = None
         self.cases = n_pats
         # self.recog_typelist = ['corr', 'baye', 'ml']
-        self.recog_typelist = ['corr']
+        self.recog_typelist = ['corr', 'corr']
         self.recog = None
         self.recog_type = None
         self.task_cnt = 0
@@ -210,7 +210,7 @@ class MainApplication(tk.Frame):
                                     self.n, self.interval, self.pats_selected, self.model_period, self.model_delay, self.wins, self.THs)
 
             self.recog.start()
-            self.reader = impinjReader.ImpinjReader(self.stop_event, self.sig_queue, self.signal)
+            self.reader = impinjReader.ImpinjReader(self.stop_event, self.signal)
             self.reader.start()
             # draw the posters and dots
             self.display()
@@ -305,7 +305,7 @@ class MainApplication(tk.Frame):
             return
         # update the input signal and pattern display status
         # if self.pressed > 0:
-        self.q_put(self.sig_queue, self.signal)
+        self.q_put(self.sig_queue, self.reader.get_signal())
         for q, state in zip(self.pat_queues, self.pats_status):
             self.q_put(q, state)
         # self.df.loc[len(self.df.index)] = [self.signal] + self.pats_status
@@ -505,10 +505,10 @@ def randpat_get(all_pats, n_pats):
 if __name__ == '__main__':
     # create window with background picture
     root = tk.Tk()
-    root.attributes("-fullscreen", True)
-    n_pats = [3, 9, 15, 21]
+    # root.attributes("-fullscreen", True)
+    n_pats = [9]
     app = MainApplication(root, n_pats)
-    # app.set_winsize((1680, 1050))
+    app.set_winsize((1680, 1050))
     bg_file = "./photo/bg.jpg"
     app.set_background(bg_file)
 
