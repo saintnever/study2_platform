@@ -32,7 +32,7 @@ class Recognizer(threading.Thread):
             self.win = self.wins.get(self.algo + str(self.n))
             self.TH = self.THs.get(self.algo + str(self.n))
             print(self.win, self.TH, self.n)
-        self.inteval = interval   # in second. add residue time to match timed from main thread
+        self.inteval = interval + 0.0001 # in second. add residue time to match timed from main thread
         self.win_n = int(self.win / self.inteval)
         self.step = self.inteval
         self.pats_status = [0 for _ in range(self.n)]
@@ -116,14 +116,17 @@ class Recognizer(threading.Thread):
 
     def recog_baye(self):
         t_start = time.time()
-        signal = self.sigs_q
+        signal = [0] * len(self.sigs_q)
+        for i, x in enumerate(self.sigs_q - np.mean(self.sigs_q)):
+            if x > 0:
+                signal[i] = 1
         # print(signal)
         m_changes = list()
         i = 0
         while True:
             try:
-                if signal[-i] is not self.sigs_q[-(i+1)]:
-                    m_changes.append(len(self.sigs_q) - i)
+                if signal[-i] is not signal[-(i+1)]:
+                    m_changes.append(len(signal) - i)
                     if i > self.win_n:
                         break
                 i += 1
