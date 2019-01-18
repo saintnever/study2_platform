@@ -45,7 +45,7 @@ class MainApplication(tk.Frame):
         self.pats_status = None
         self.cases = n_pats
         # self.recog_typelist = ['corr', 'baye', 'ml']
-        self.recog_typelist = ['baye']
+        self.recog_typelist = ['baye', 'corr']
         self.recog = None
         self.recog_type = None
         self.task_cnt = 0
@@ -71,9 +71,9 @@ class MainApplication(tk.Frame):
         self.p = list()
         self.tprev = time.time()
         self.wins = {'corr3': 2, 'corr5': 4, 'corr6': 5, 'corr9': 5, 'corr10': 5, 'corr15': 7, 'corr21': 7,
-                     'baye3': 2, 'baye9': 5, 'baye10': 5, 'baye15': 6, 'baye21': 7}
+                     'baye3': 2, 'baye6': 3, 'baye9': 5, 'baye10': 5, 'baye15': 6, 'baye21': 7}
         self.THs = {'corr3': 0.4, 'corr5': 0.3, 'corr6': 0.3, 'corr9': 0.2, 'corr10': 0.2, 'corr15': 0.2, 'corr21': 0.3,
-                    'baye3': 0.6, 'baye9': 0.4, 'baye10': 0.4, 'baye15': 0.3, 'baye21': 0.2}
+                    'baye3': 0.6, 'baye6': 0.6, 'baye9': 0.4, 'baye10': 0.4, 'baye15': 0.3, 'baye21': 0.2}
         self.win = 2
         self.interval = 0.01
         self.sig_queue = None
@@ -489,7 +489,7 @@ if __name__ == '__main__':
     # create window with background picture
     root = tk.Tk()
     # root.attributes("-fullscreen", True)
-    n_pats = [3, 9, 15] * 2
+    n_pats = [3, 6, 9] * 2
     app = MainApplication(root, n_pats)
     app.set_winsize((1680, 1050))
     bg_file = "./photo/bg.jpg"

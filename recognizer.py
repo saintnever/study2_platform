@@ -32,7 +32,7 @@ class Recognizer(threading.Thread):
             self.win = self.wins.get(self.algo + str(self.n))
             self.TH = self.THs.get(self.algo + str(self.n))
             print(self.win, self.TH, self.n)
-        self.inteval = interval + 0.0001 # in second. add residue time to match timed from main thread
+        self.inteval = interval + 0.0002 # in second. add residue time to match timed from main thread
         self.win_n = int(self.win / self.inteval)
         self.step = self.inteval
         self.pats_status = [0 for _ in range(self.n)]
