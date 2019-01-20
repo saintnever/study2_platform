@@ -142,7 +142,7 @@ class MainApplication(tk.Frame):
                 for pats in self.pats_dict.keys():
                     self.seq.append([case, pats])
             random.shuffle(self.seq)
-            random.shuffle(self.recog_typelist)
+            # random.shuffle(self.recog_typelist)
 
         if self.task_cnt < len(self.seq):
             # assign n and recognizer type for current task
@@ -153,7 +153,6 @@ class MainApplication(tk.Frame):
             self.posters_selected = random.sample(self.other_posters, self.n - 1) + [self.target_poster]
             random.shuffle(self.posters_selected)
             self.preposters.append(self.posters_selected)
-            self.recog_type = self.recog_typelist[0]
         else:
             nn = len(self.seq)
             if self.task_cnt == nn:
@@ -167,8 +166,8 @@ class MainApplication(tk.Frame):
             self.pats = self.pats_dict[self.pat_type]
             # random.shuffle(self.preposters)
             self.posters_selected = self.seq[self.task_cnt - nn][2]
-            self.recog_type = self.recog_typelist[1]
         # print(self.pats, self.seq, len(self.posters_selected))
+        self.recog_type = self.recog_typelist[self.session_cnt % 2]
         self.target = self.posters_selected.index(self.target_poster)
         for pat in self.pats:
             if len(pat) == self.n:
