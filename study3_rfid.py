@@ -13,6 +13,7 @@ import numpy as np
 import csv
 import os
 import impinjReader
+import ArduinoReader
 
 
 class MainApplication(tk.Frame):
@@ -210,7 +211,9 @@ class MainApplication(tk.Frame):
                                     self.n, self.interval, self.pats_selected, self.model_period, self.model_delay, self.wins, self.THs)
 
             self.recog.start()
-            self.reader = impinjReader.ImpinjReader(self.stop_event, self.signal)
+            self.reader = ArduinoReader.ArduinoReader(self.stop_event, self.signal)
+            # self.reader = impinjReader.ImpinjReader(self.stop_event, self.signal)
+
             self.reader.start()
             # draw the posters and dots
             self.display()
