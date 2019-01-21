@@ -21,7 +21,7 @@ class ArduinoReader(threading.Thread):
         #self.s.connect((self.TCP_IP, self.TCP_PORT))
         # port = '/dev/cu.usbmodem14431'
         port = "COM6"
-        self.s = serial.Serial(port, 9600, timeout=0.1, rtscts=True, dsrdtr=True)
+        self.s = serial.Serial(port, 9600, timeout=1, rtscts=True, dsrdtr=True)
         if not self.s.isOpen():
             self.s.open()
         print("connected: ", self.s)
@@ -29,7 +29,10 @@ class ArduinoReader(threading.Thread):
     def run(self):
         while not self.stopped.is_set():
             print(self.s.readline().rstrip())
-            self.signal = float(self.s.readline().rstrip())
+            try:
+                self.signal = float(self.s.readline().rstrip())
+            except ValueError:
+                continue
         self.clean()
 
     def get_signal(self):
