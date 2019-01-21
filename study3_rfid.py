@@ -45,7 +45,7 @@ class MainApplication(tk.Frame):
         self.pats_status = None
         self.cases = n_pats
         # self.recog_typelist = ['corr', 'baye', 'ml']
-        self.recog_typelist = ['baye', 'corr']
+        self.recog_typelist = ['corr']
         self.recog = None
         self.recog_type = None
         self.task_cnt = 0
@@ -70,10 +70,10 @@ class MainApplication(tk.Frame):
         self.signal = 0
         self.p = list()
         self.tprev = time.time()
-        self.wins = {'corr3': 2, 'corr5': 4, 'corr6': 5, 'corr9': 5, 'corr10': 5, 'corr15': 7, 'corr21': 7,
-                     'baye3': 2, 'baye6': 3, 'baye9': 5, 'baye10': 5, 'baye15': 6, 'baye21': 7}
-        self.THs = {'corr3': 0.4, 'corr5': 0.3, 'corr6': 0.3, 'corr9': 0.2, 'corr10': 0.2, 'corr15': 0.2, 'corr21': 0.3,
-                    'baye3': 0.6, 'baye6': 0.6, 'baye9': 0.4, 'baye10': 0.4, 'baye15': 0.3, 'baye21': 0.2}
+        self.wins = {'corr3': 3, 'corr9': 6, 'corr10': 5, 'corr15': 7, 'corr21':7,
+                     'baye3': 2, 'baye9': 5, 'baye10': 5, 'baye15': 6, 'baye21':7}
+        self.THs = {'corr3': 0.4, 'corr9': 0.2, 'corr10': 0.2, 'corr15': 0.2, 'corr21': 0.3,
+                    'baye3': 0.6, 'baye9': 0.4, 'baye10': 0.4, 'baye15': 0.3, 'baye21': 0.2}
         self.win = 2
         self.interval = 0.01
         self.sig_queue = None
@@ -130,25 +130,45 @@ class MainApplication(tk.Frame):
     def set_images(self, image_seq):
         self.posters_selected = image_seq
 
-    def set_pats(self, pat_opt):
-        self.pats = pat_opt
+    def set_pats(self, pat_opt, pat_worst, pat_rand):
+        self.pats_dict['opt'] = pat_opt
+        self.pats_dict['worst'] = pat_worst
+        self.pats_dict['rand'] = pat_rand
 
     def task_init(self):
+
         # init the task sequence for current session
         if self.task_cnt == 0:
             for case in self.cases:
-                for recog in self.recog_typelist:
-                    self.seq.append([case, recog])
+                for pats in self.pats_dict.keys():
+                    self.seq.append([case, pats])
             random.shuffle(self.seq)
+            random.shuffle(self.recog_typelist)
 
-        # assign n and recognizer type for current task
-        self.n = self.seq[self.task_cnt][0]
-        self.recog_type = self.seq[self.task_cnt][1]
-        # self.recog_type = self.seq[self.task_cnt][1]
-        self.posters_selected = random.sample(self.other_posters, self.n - 1) + [self.target_poster]
-        random.shuffle(self.posters_selected)
-        self.preposters.append(self.posters_selected)
-
+        if self.task_cnt < len(self.seq):
+            # assign n and recognizer type for current task
+            self.n = self.seq[self.task_cnt][0]
+            # self.recog_type = self.seq[self.task_cnt][1]
+            self.pat_type = self.seq[self.task_cnt][1]
+            self.pats = self.pats_dict[self.pat_type]
+            self.posters_selected = random.sample(self.other_posters, self.n - 1) + [self.target_poster]
+            random.shuffle(self.posters_selected)
+            self.preposters.append(self.posters_selected)
+            self.recog_type = self.recog_typelist[0]
+        else:
+            nn = len(self.seq)
+            if self.task_cnt == nn:
+                # assign n and recognizer type for current task
+                for i, item in enumerate(self.seq):
+                    item.append(self.preposters[i])
+                random.shuffle(self.seq)
+            self.n = self.seq[self.task_cnt - nn][0]
+            # self.recog_type = self.seq[self.task_cnt][1]
+            self.pat_type = self.seq[self.task_cnt - nn][1]
+            self.pats = self.pats_dict[self.pat_type]
+            # random.shuffle(self.preposters)
+            self.posters_selected = self.seq[self.task_cnt - nn][2]
+            self.recog_type = self.recog_typelist[1]
         # print(self.pats, self.seq, len(self.posters_selected))
         self.target = self.posters_selected.index(self.target_poster)
         for pat in self.pats:
@@ -162,7 +182,7 @@ class MainApplication(tk.Frame):
         self.pat_queues = [queue.Queue(maxsize=int(self.win / self.interval)) for _ in range(self.n)]
 
     def selection_task(self, event):
-        if self.task_cnt == len(self.cases) * len(self.recog_typelist):
+        if self.task_cnt == len(self.cases) * len(self.recog_typelist) * len(self.pats_dict.keys()):
             # clean from previous task
             self.clean_task()
             self.clean_session()
@@ -170,13 +190,13 @@ class MainApplication(tk.Frame):
             self.rest_text = self.w.create_text(int(self.width / 2), int(self.height / 2), anchor='center',
                                                 fill='orange', font=("Microsoft YaHei", 50), tags=('text', ))
             self.rest_handles.append(self.root.after(1, self.rest))
-        # elif self.task_cnt % 6 == 0 and self.task_cnt > 0 and self.rest_flag == 0:
-        #     self.clean_task()
-        #     self.rest_cnt = 30
-        #     self.rest_text = self.w.create_text(int(self.width / 2), int(self.height / 2), anchor='center',
-        #                                         fill='orange', font=("Microsoft YaHei", 50), tags=('text', ))
-        #     self.rest_handles.append(self.root.after(1, self.rest_within))
-        #     self.rest_flag = 1
+        elif self.task_cnt % 6 == 0 and self.task_cnt > 0 and self.rest_flag == 0:
+            self.clean_task()
+            self.rest_cnt = 30
+            self.rest_text = self.w.create_text(int(self.width / 2), int(self.height / 2), anchor='center',
+                                                fill='orange', font=("Microsoft YaHei", 50), tags=('text', ))
+            self.rest_handles.append(self.root.after(1, self.rest_within))
+            self.rest_flag = 1
         else:
             # clean from previous task
             self.clean_task()
@@ -205,8 +225,6 @@ class MainApplication(tk.Frame):
     def display(self):
         if self.n == 3:
             self.draw(1, 3, int(self.width / 20))
-        elif self.n == 6 or self.n == 5:
-            self.draw(1, self.n, int(self.width / 50))
         elif self.n == 9:
             self.draw(3, 3, int(self.height / 30))
         elif self.n == 10:
@@ -277,7 +295,7 @@ class MainApplication(tk.Frame):
             if not os.path.exists(directory):
                 os.makedirs(directory)
             rawfile = directory +'/n'+str(self.n)+'_session'+str(self.session_cnt)+'_task'+\
-                           str(self.task_cnt-1)+'_'+self.recog_type + '_target'+str(self.target)+\
+                           str(self.task_cnt-1)+'_'+self.recog_type+'_'+self.pat_type + '_target'+str(self.target)+\
                            '_selected'+str(self.recog.get_target())+'.csv'
             with open(rawfile, 'w', newline='') as file:
                 rawcsvwriter = csv.writer(file, delimiter=',')
@@ -287,7 +305,9 @@ class MainApplication(tk.Frame):
             return
         # update the input signal and pattern display status
         # if self.pressed > 0:
-        self.q_put(self.sig_queue, self.reader.get_signal())
+        self.signal = self.reader.get_signal()
+        print(self.signal)
+        self.q_put(self.sig_queue, self.signal)
         for q, state in zip(self.pat_queues, self.pats_status):
             self.q_put(q, state)
         # self.df.loc[len(self.df.index)] = [self.signal] + self.pats_status
@@ -444,7 +464,6 @@ delays_optimized = [[0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0],
                [0, 0, 0, 0, 0, 0, 367, 0, 400, 0, 216, 433, 0, 233, 467],
                [0, 0, 0, 200, 0, 225, 0, 167, 333, 0, 183, 367, 0, 200, 400, 0, 216, 433, 0, 233, 467]]
 
-
 periods_worst = [[300, 350, 350], [300, 350, 350, 400, 400, 450, 450, 500, 500],
                  [300, 350, 350, 400, 400, 450, 450, 500, 500, 500, 550, 550, 550, 600, 600],
                  [300, 350, 350, 400, 400, 450, 450, 500, 500, 500, 550, 550, 550, 600, 600, 600, 650, 650, 650, 700, 700]]
@@ -489,7 +508,7 @@ if __name__ == '__main__':
     # create window with background picture
     root = tk.Tk()
     # root.attributes("-fullscreen", True)
-    n_pats = [3, 6, 9] * 2
+    n_pats = [3, 9, 15]
     app = MainApplication(root, n_pats)
     app.set_winsize((1680, 1050))
     bg_file = "./photo/bg.jpg"
@@ -499,10 +518,10 @@ if __name__ == '__main__':
     poster_files = ["./photo/" + str(i) + ".jpeg" for i in range(21)]
     app.set_posters(poster_files)
     pats_opt = pats_gen(periods_optimized, delays_optimized, n_pats)
-    # pats_worst = pats_gen(periods_worst, delays_worst, n_pats)
+    pats_worst = pats_gen(periods_worst, delays_worst, n_pats)
     # pats_rand = randpat_get(all_pats, n_pats)
     # print(pats_rand)
-    app.set_pats(pats_opt)
+    app.set_pats(pats_opt, pats_opt, pats_opt)
     #
     # start mainloop
     root.mainloop()

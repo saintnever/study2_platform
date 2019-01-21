@@ -32,7 +32,7 @@ class Recognizer(threading.Thread):
             self.win = self.wins.get(self.algo + str(self.n))
             self.TH = self.THs.get(self.algo + str(self.n))
             print(self.win, self.TH, self.n)
-        self.inteval = interval + 0.0002 # in second. add residue time to match timed from main thread
+        self.inteval = interval + 0.0002  # in second. add residue time to match timed from main thread
         self.win_n = int(self.win / self.inteval)
         self.step = self.inteval
         self.pats_status = [0 for _ in range(self.n)]
@@ -98,15 +98,31 @@ class Recognizer(threading.Thread):
         else:
             print('Recognizer does not exist!')
 
+    def moving_average(self, x, n_ma):
+        signal = list()
+        for i, item in enumerate(x):
+            if i == 0:
+                signal.append(item)
+            elif i < n_ma:
+                signal.append(np.nanmean(x[:i]))
+            else:
+                signal.append(np.mean(x[i - 10:i]))
+        return signal
+
     def recog_corr(self):
         # if np.sum(signal) == 0 and np.sum(signal) == len(signal) and np.sum(pat) == 0 and np.sum(pat) == len(pat):
         #     return 0
-        signal = self.sigs_q[-self.win_n:]
+        signal_raw = self.sigs_q[-self.win_n:]
+        # print(signal_raw)
+        n_ma = 10
+        signal = self.moving_average(signal_raw, n_ma)
+        # print(signal)
         # print(signal[-10:])
         probs = list()
         for pat in self.pats_q:
             # probs.append(abs(np.corrcoef(signal, pat[-self.win_n:])[0][1]))
-            probs.append(abs(np.corrcoef(signal, pat[-self.win_n:])[0][1]))
+            pat_smooth = self.moving_average(pat[-self.win_n:], n_ma)
+            probs.append(abs(np.corrcoef(signal, pat_smooth)[0][1]))
 
         # select target
         if np.max(probs) > self.TH:
@@ -116,17 +132,21 @@ class Recognizer(threading.Thread):
 
     def recog_baye(self):
         t_start = time.time()
-        signal = [0] * len(self.sigs_q)
-        for i, x in enumerate(self.sigs_q - np.mean(self.sigs_q)):
-            if x > 0:
-                signal[i] = 1
-        # print(signal)
+        # signal = self.sigs_q
+        signal_raw = self.sigs_q
+        # print(signal_raw)
+        n_ma = 10
+        signal = list()
+        for i in range(self.win_n + 10):
+            signal.append(np.mean(signal_raw[-i - n_ma:-i]))
+        signal = signal - np.nanmean(signal)
+        print(signal)
         m_changes = list()
         i = 0
         while True:
             try:
-                if signal[-i] is not signal[-(i+1)]:
-                    m_changes.append(len(signal) - i)
+                if signal[-i] * signal[-(i+1)] < 0:
+                    m_changes.append(len(self.sigs_q) - i)
                     if i > self.win_n:
                         break
                 i += 1
@@ -135,6 +155,7 @@ class Recognizer(threading.Thread):
 
         m_changes = m_changes[1:]
         m_changes.reverse()
+        print(m_changes)
         if m_changes == self.mchanges_prev:
             return
         self.mchanges_prev = m_changes

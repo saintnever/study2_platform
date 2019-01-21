@@ -1,7 +1,6 @@
 import socket
 import queue
 import threading
-import select
 import random
 import numpy as np
 import pandas as pd
@@ -16,28 +15,18 @@ class ImpinjReader(threading.Thread):
         self.signal = sig
         self.TCP_IP = "127.0.0.1"
         self.TCP_PORT = 14
-        self.BUFFER_SIZE = 512
+        self.BUFFER_SIZE = 1024
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.connect((self.TCP_IP, self.TCP_PORT))
-        self.s.settimeout(0.5)
-        # self.s.setblocking(False)
-
         print("connected: ", self.s)
         # self.dataq = dataq
         self.tag = 'E20000193907006713102965'
 
     def run(self):
         while not self.stopped.is_set():
-            # if self.ready[0]:
-            # try:
             data = self.s.recv(self.BUFFER_SIZE).decode("utf-8").split(',')
-            if len(data) > 4:
-                self.signal = float(data[5])
-            else:
-                self.signal = -100
-            # except socket.error as e:
-            #     self.signal = -100
-            # print(self.signal)
+            # self.dataq.put(data[5])
+            self.signal = float(data[5])
         self.s.close()
 
     def get_signal(self):
