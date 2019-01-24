@@ -51,8 +51,7 @@ class Recognizer(threading.Thread):
                 self.feature_ML = pickle.load(file)
         self.init_algo()
         self.timer = time.time()
-        if modality == 'foot':
-            self.delayi = 10
+        self.modality = modality
 
     def init_algo(self):
             # self.model_period = model_period
@@ -125,7 +124,8 @@ class Recognizer(threading.Thread):
         for pat in self.pats_q:
             # probs.append(abs(np.corrcoef(signal, pat[-self.win_n:])[0][1]))
             pat_smooth = self.moving_average(pat[-self.win_n:], n_ma)
-            pat_smooth = np.roll(pat_smooth, self.delayi)
+            if self.modality == 'foot':
+                pat_smooth = np.roll(pat_smooth, 10)
             probs.append(abs(np.corrcoef(signal, pat_smooth)[0][1]))
 
         # select target
