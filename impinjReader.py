@@ -17,7 +17,7 @@ class ImpinjReader(threading.Thread):
         self.TCP_PORT = 14
         self.BUFFER_SIZE = 512
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.settimeout(0.01)
+        # self.s.settimeout(0.01)
         try:
             self.s.connect((self.TCP_IP, self.TCP_PORT))
         except BlockingIOError:

@@ -70,9 +70,9 @@ class MainApplication(tk.Frame):
         self.signal = 0
         self.p = list()
         self.tprev = time.time()
-        self.wins = {'corr3': 3, 'corr5': 2, 'corr9': 6, 'corr10': 5, 'corr15': 7, 'corr21':7,
+        self.wins = {'corr3': 3, 'corr5': 2,'corr6': 6, 'corr9': 6, 'corr10': 5, 'corr15': 7, 'corr21':7,
                      'baye3': 2, 'baye5': 3, 'baye9': 5, 'baye10': 5, 'baye15': 6, 'baye21':7}
-        self.THs = {'corr3': 0.4, 'corr5': 0.7, 'corr9': 0.2, 'corr10': 0.2, 'corr15': 0.2, 'corr21': 0.3,
+        self.THs = {'corr3': 0.4, 'corr5': 0.7, 'corr6': 0.2, 'corr9': 0.2, 'corr10': 0.2, 'corr15': 0.2, 'corr21': 0.3,
                     'baye3': 0.6, 'baye5': 0.3, 'baye9': 0.4, 'baye10': 0.4, 'baye15': 0.3, 'baye21': 0.2}
         self.win = 2
         self.interval = 0.01
@@ -210,7 +210,7 @@ class MainApplication(tk.Frame):
             # start new recognizer thread for the new task
             self.stop_event.clear()
             self.recog = Recognizer(self.stop_event, self.select_event, self.sig_queue, self.pat_queues, self.recog_type,
-                                    self.n, self.interval, self.pats_selected, self.model_period, self.model_delay, self.wins, self.THs)
+                                    self.n, self.interval, self.pats_selected, self.model_period, self.model_delay, self.wins, self.THs, self.modality)
             self.recog.start()
             self.reader.start()
             # draw the posters and dots
@@ -228,6 +228,8 @@ class MainApplication(tk.Frame):
             self.draw(1, 3, int(self.width / 20))
         elif self.n == 5:
             self.draw(1, 5, int(self.height / 30))
+        elif self.n == 6:
+            self.draw(1, 6, int(self.height / 30))
         elif self.n == 9:
             self.draw(3, 3, int(self.height / 30))
         elif self.n == 10:
@@ -514,7 +516,7 @@ if __name__ == '__main__':
     # create window with background picture
     root = tk.Tk()
     # root.attributes("-fullscreen", True)
-    n_pats = [9, 15]
+    n_pats = [3, 9, 15, 21]
     app = MainApplication(root, n_pats)
     app.set_winsize((1680, 1050))
     bg_file = "./photo/bg.jpg"

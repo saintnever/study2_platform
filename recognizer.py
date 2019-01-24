@@ -10,7 +10,7 @@ import pickle
 
 
 class Recognizer(threading.Thread):
-    def __init__(self, stop_event, select_event, sig_queue, pat_queues, algo, n, interval, pats, model_period, model_delay, wins, THs):
+    def __init__(self, stop_event, select_event, sig_queue, pat_queues, algo, n, interval, pats, model_period, model_delay, wins, THs, modality):
         threading.Thread.__init__(self)
         self.algo = algo
         self.stopped = stop_event
@@ -51,6 +51,8 @@ class Recognizer(threading.Thread):
                 self.feature_ML = pickle.load(file)
         self.init_algo()
         self.timer = time.time()
+        if modality == 'foot':
+            self.delayi = 10
 
     def init_algo(self):
             # self.model_period = model_period
@@ -77,9 +79,9 @@ class Recognizer(threading.Thread):
                 self.select.set()
             # get input queue and start recog for current win
             try:
-                self.sigs_q.append(self.data_queue.get(timeout=0.1))
+                self.sigs_q.append(self.data_queue.get(timeout=1))
                 for pat, q_pat in zip(self.pats_q, self.pat_queues):
-                    pat.append(q_pat.get(timeout=0.1))
+                    pat.append(q_pat.get(timeout=1))
             except queue.Empty:
                 continue
             # print(len(self.sigs_q))
@@ -113,7 +115,7 @@ class Recognizer(threading.Thread):
         # if np.sum(signal) == 0 and np.sum(signal) == len(signal) and np.sum(pat) == 0 and np.sum(pat) == len(pat):
         #     return 0
         signal_raw = self.sigs_q[-self.win_n:]
-        n_ma = 4
+        n_ma = 10
         signal = self.moving_average(signal_raw, n_ma)
         # signal = np.sign(signal - np.mean(signal))
         # print(signal_raw)
@@ -123,6 +125,7 @@ class Recognizer(threading.Thread):
         for pat in self.pats_q:
             # probs.append(abs(np.corrcoef(signal, pat[-self.win_n:])[0][1]))
             pat_smooth = self.moving_average(pat[-self.win_n:], n_ma)
+            pat_smooth = np.roll(pat_smooth, self.delayi)
             probs.append(abs(np.corrcoef(signal, pat_smooth)[0][1]))
 
         # select target
