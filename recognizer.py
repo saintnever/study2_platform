@@ -77,9 +77,9 @@ class Recognizer(threading.Thread):
                 self.select.set()
             # get input queue and start recog for current win
             try:
-                self.sigs_q.append(self.data_queue.get(timeout=1))
+                self.sigs_q.append(self.data_queue.get(timeout=0.1))
                 for pat, q_pat in zip(self.pats_q, self.pat_queues):
-                    pat.append(q_pat.get(timeout=1))
+                    pat.append(q_pat.get(timeout=0.1))
             except queue.Empty:
                 continue
             # print(len(self.sigs_q))
@@ -106,16 +106,17 @@ class Recognizer(threading.Thread):
             elif i < n_ma:
                 signal.append(np.nanmean(x[:i]))
             else:
-                signal.append(np.mean(x[i - 10:i]))
+                signal.append(np.mean(x[i - n_ma:i]))
         return signal
 
     def recog_corr(self):
         # if np.sum(signal) == 0 and np.sum(signal) == len(signal) and np.sum(pat) == 0 and np.sum(pat) == len(pat):
         #     return 0
         signal_raw = self.sigs_q[-self.win_n:]
-        # print(signal_raw)
-        n_ma = 10
+        n_ma = 4
         signal = self.moving_average(signal_raw, n_ma)
+        # signal = np.sign(signal - np.mean(signal))
+        # print(signal_raw)
         # print(signal)
         # print(signal[-10:])
         probs = list()

@@ -52,7 +52,6 @@ class MainApplication(tk.Frame):
         self.task_cnt = 0
         self.session_cnt = 0
         self.rest_cnt = 20
-        self.id = tk.StringVar()
 
         # create canvas
         self.w = tk.Canvas(self.root, width=self.winsize[0], height=self.winsize[1])
@@ -71,10 +70,10 @@ class MainApplication(tk.Frame):
         self.signal = 0
         self.p = list()
         self.tprev = time.time()
-        self.wins = {'corr3': 3, 'corr9': 6, 'corr10': 5, 'corr15': 7, 'corr21':7,
-                     'baye3': 2, 'baye9': 5, 'baye10': 5, 'baye15': 6, 'baye21':7}
-        self.THs = {'corr3': 0.4, 'corr9': 0.2, 'corr10': 0.2, 'corr15': 0.2, 'corr21': 0.3,
-                    'baye3': 0.6, 'baye9': 0.4, 'baye10': 0.4, 'baye15': 0.3, 'baye21': 0.2}
+        self.wins = {'corr3': 3, 'corr5': 2, 'corr9': 6, 'corr10': 5, 'corr15': 7, 'corr21':7,
+                     'baye3': 2, 'baye5': 3, 'baye9': 5, 'baye10': 5, 'baye15': 6, 'baye21':7}
+        self.THs = {'corr3': 0.4, 'corr5': 0.7, 'corr9': 0.2, 'corr10': 0.2, 'corr15': 0.2, 'corr21': 0.3,
+                    'baye3': 0.6, 'baye5': 0.3, 'baye9': 0.4, 'baye10': 0.4, 'baye15': 0.3, 'baye21': 0.2}
         self.win = 2
         self.interval = 0.01
         self.sig_queue = None
@@ -83,7 +82,8 @@ class MainApplication(tk.Frame):
         self.fpress_time = 0
         self.L1 = self.L2 = None
         self.E1 = self.E2 = None
-        self.modality = None
+        self.id = tk.StringVar()
+        self.modality = tk.StringVar()
 
         self.df = pd.DataFrame()
         self.target = None
@@ -153,28 +153,15 @@ class MainApplication(tk.Frame):
                     self.seq.append([case, pats])
             random.shuffle(self.seq)
 
-        if self.task_cnt < len(self.seq):
-            # assign n and recognizer type for current task
-            self.n = self.seq[self.task_cnt][0]
-            # self.recog_type = self.seq[self.task_cnt][1]
-            self.pat_type = self.seq[self.task_cnt][1]
-            self.pats = self.pats_dict[self.pat_type]
-            self.posters_selected = random.sample(self.other_posters, self.n - 1) + [self.target_poster]
-            random.shuffle(self.posters_selected)
-            self.preposters.append(self.posters_selected)
-        else:
-            nn = len(self.seq)
-            if self.task_cnt == nn:
-                # assign n and recognizer type for current task
-                for i, item in enumerate(self.seq):
-                    item.append(self.preposters[i])
-                random.shuffle(self.seq)
-            self.n = self.seq[self.task_cnt - nn][0]
-            # self.recog_type = self.seq[self.task_cnt][1]
-            self.pat_type = self.seq[self.task_cnt - nn][1]
-            self.pats = self.pats_dict[self.pat_type]
-            # random.shuffle(self.preposters)
-            self.posters_selected = self.seq[self.task_cnt - nn][2]
+        # if self.task_cnt < len(self.seq):
+        # assign n and recognizer type for current task
+        self.n = self.seq[self.task_cnt][0]
+        # self.recog_type = self.seq[self.task_cnt][1]
+        self.pat_type = self.seq[self.task_cnt][1]
+        self.pats = self.pats_dict[self.pat_type]
+        self.posters_selected = random.sample(self.other_posters, self.n - 1) + [self.target_poster]
+        random.shuffle(self.posters_selected)
+
         if self.modality == 'thumb':
             self.recog_type = 'corr'
             self.reader = ArduinoReader.ArduinoReader(self.stop_event, self.signal)
@@ -197,6 +184,7 @@ class MainApplication(tk.Frame):
         self.pat_queues = [queue.Queue(maxsize=int(self.win / self.interval)) for _ in range(self.n)]
 
     def selection_task(self, event):
+
         if self.task_cnt == len(self.cases) * len(self.recog_typelist) * len(self.pats_dict.keys()):
             # clean from previous task
             self.clean_task()
@@ -238,6 +226,8 @@ class MainApplication(tk.Frame):
     def display(self):
         if self.n == 3:
             self.draw(1, 3, int(self.width / 20))
+        elif self.n == 5:
+            self.draw(1, 5, int(self.height / 30))
         elif self.n == 9:
             self.draw(3, 3, int(self.height / 30))
         elif self.n == 10:
@@ -319,7 +309,7 @@ class MainApplication(tk.Frame):
         # update the input signal and pattern display status
         # if self.pressed > 0:
         self.signal = self.reader.get_signal()
-        # print(self.signal)
+        print(self.signal)
         self.q_put(self.sig_queue, self.signal)
         for q, state in zip(self.pat_queues, self.pats_status):
             self.q_put(q, state)
@@ -359,8 +349,11 @@ class MainApplication(tk.Frame):
         if len(items) > 0:
             self.L1.destroy()
             self.E1.destroy()
+            self.L2.destroy()
+            self.E2.destroy()
             self.id = self.id.get()
-            print(self.id)
+            self.modality = self.modality.get()
+            print(self.id, self.modality)
             for item in items:
                 self.w.delete(item)
             self.csvfile = open('data/'+str(self.id)+'.csv', 'w', newline='')
@@ -467,12 +460,12 @@ class MainApplication(tk.Frame):
         self.root.destroy()
 
 
-periods_optimized = [[300, 450, 650], [300, 350, 400, 500, 600, 700], [300, 350, 400, 450, 500, 550, 600, 650, 700],
+periods_optimized = [[300, 450, 650], [300, 400, 500, 600, 700], [300, 350, 400, 500, 600, 700], [300, 350, 400, 450, 500, 550, 600, 650, 700],
                 [300, 350, 400, 450, 500, 550, 600, 650, 700, 700],
                 [300, 350, 400, 450, 500, 550, 550, 600, 600, 650, 650, 650, 700, 700, 700],
                 [300, 350, 400, 400, 450, 450, 500, 500, 500, 550, 550, 550, 600, 600, 600, 650, 650, 650, 700, 700, 700]]
 
-delays_optimized = [[0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0],
+delays_optimized = [[0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0],
                [0, 0, 0, 0, 0, 0, 0, 0, 0, 467],
                [0, 0, 0, 0, 0, 0, 367, 0, 400, 0, 216, 433, 0, 233, 467],
                [0, 0, 0, 200, 0, 225, 0, 167, 333, 0, 183, 367, 0, 200, 400, 0, 216, 433, 0, 233, 467]]
@@ -521,7 +514,7 @@ if __name__ == '__main__':
     # create window with background picture
     root = tk.Tk()
     # root.attributes("-fullscreen", True)
-    n_pats = [3, 9, 15]
+    n_pats = [9, 15]
     app = MainApplication(root, n_pats)
     app.set_winsize((1680, 1050))
     bg_file = "./photo/bg.jpg"
