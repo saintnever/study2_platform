@@ -311,7 +311,7 @@ class MainApplication(tk.Frame):
         # update the input signal and pattern display status
         # if self.pressed > 0:
         self.signal = self.reader.get_signal()
-        print(self.signal)
+        # print(self.signal)
         self.q_put(self.sig_queue, self.signal)
         for q, state in zip(self.pat_queues, self.pats_status):
             self.q_put(q, state)

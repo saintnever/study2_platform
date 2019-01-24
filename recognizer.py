@@ -5,8 +5,10 @@ import numpy as np
 import pandas as pd
 import time
 import pickle
+import peakutils
 # import tsfresh
 # from tsfresh.feature_extraction import MinimalFCParameters
+from matplotlib import pyplot as plt
 
 
 class Recognizer(threading.Thread):
@@ -135,31 +137,29 @@ class Recognizer(threading.Thread):
             print('recog {}, selected {}'.format(self.algo, self.pats[self.target]))
 
     def recog_baye_emg(self):
-        t_start = time.time()
-        signal = self.sigs_q
-        # signal_raw = self.sigs_q
-        # print(signal_raw)
-        # n_ma = 10
-        # signal = list()
-        # for i in range(self.win_n + 10):
-        #     signal.append(np.mean(signal_raw[-i - n_ma:-i]))
-        # signal = signal - np.nanmean(signal)
-        # print(signal)
+        signal = self.sigs_q[-self.win_n:]
+        n_dipslice = 10
+        n_riseslice = 20
         m_changes = list()
         i = 0
-        while True:
+        while i < len(signal):
             try:
-                if signal[-i] - signal[-(i + 1)] == 1:
-                    if len(m_changes) == 0 or abs(i - m_changes[-1]) > 0.3/self.inteval:
-                        m_changes.append(len(self.sigs_q) - i)
-                    if i > self.win_n:
-                        break
-                i += 1
+                dipslice = signal[i:i+n_dipslice]
+                if signal[i] - np.min(dipslice) > 5:
+                    ind = np.argmin(dipslice) + i
+                    riseslice = signal[ind:ind + n_riseslice]
+                    if np.max(riseslice) - np.min(dipslice) > 8:
+                        m_changes.append(i)
+                        i = ind + n_riseslice
+                    else:
+                        i += 1
+                else:
+                    i += 1
             except IndexError:
                 break
 
-        m_changes = m_changes[1:]
-        m_changes.reverse()
+        # m_changes = m_changes[1:]
+        # m_changes.reverse()
         # print(m_changes)
         if m_changes == self.mchanges_prev:
             return
@@ -195,6 +195,8 @@ class Recognizer(threading.Thread):
                     prob_delay = list()
                     for p in dpats:
                         pat = self.pats_q[p]
+                        # pat = self.moving_average(pat, 10)
+                        # pat = np.roll(pat, 10)
                         m_delay = self.measure_delay(m_changes[i], pat)
                         # print(period, m_delay)
                         # m_d[i].append(m_delay)
@@ -288,6 +290,7 @@ class Recognizer(threading.Thread):
                     prob_delay = list()
                     for p in dpats:
                         pat = self.pats_q[p]
+                        pat = self.moving_average(pat, n_ma)
                         m_delay = self.measure_delay(m_changes[i], pat)
                         # print(period, m_delay)
                         # m_d[i].append(m_delay)

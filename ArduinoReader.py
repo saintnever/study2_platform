@@ -14,15 +14,9 @@ class ArduinoReader(threading.Thread):
         threading.Thread.__init__(self)
         self.stopped = stop_event
         self.signal = sig
-        #self.TCP_IP = "127.0.0.1"
-        #self.TCP_PORT = 14
-        #self.BUFFER_SIZE = 1024
-        #self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #self.s.connect((self.TCP_IP, self.TCP_PORT))
-        # port = '/dev/cu.usbmodem14431'
-        port = "COM3"
+        port = "COM11"
         # self.s = serial.Serial(port, 9600, timeout=1, rtscts=True, dsrdtr=True)
-        self.s = serial.Serial(port, 115200, timeout=1, rtscts=True, dsrdtr=True)
+        self.s = serial.Serial(port, 115200, timeout=0.1, rtscts=True, dsrdtr=True)
         if not self.s.isOpen():
             self.s.open()
         print("connected: ", self.s)
@@ -43,7 +37,7 @@ class ArduinoReader(threading.Thread):
         # self.s.cancel_read()
         while self.s.isOpen():
             self.s.close()
-            print('the serial port is open? {}'.format(self.s.isOpen()))
+            # print('the serial port is open? {}'.format(self.s.isOpen()))
 
 
 if __name__ == '__main__':
