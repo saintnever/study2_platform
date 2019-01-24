@@ -46,7 +46,7 @@ class MainApplication(tk.Frame):
         self.pats_status = None
         self.cases = n_pats
         # self.recog_typelist = ['corr', 'baye', 'ml']
-        self.recog_typelist = ['corr']
+        self.recog_typelist = ['baye']
         self.recog = None
         self.recog_type = None
         self.task_cnt = 0
@@ -81,9 +81,10 @@ class MainApplication(tk.Frame):
         self.pat_queues = list()
         self.task_time = 0
         self.fpress_time = 0
-        self.L1 = None
-        self.E1 = None
-        self.id_input()
+        self.L1 = self.L2 = None
+        self.E1 = self.E2 = None
+        self.modality = None
+
         self.df = pd.DataFrame()
         self.target = None
         self.pressed = 0
@@ -96,16 +97,23 @@ class MainApplication(tk.Frame):
         self.preposters = list()
         self.seq = []
         self.reader = None
+        self.id_input()
 
     def id_input(self):
         self.L1 = tk.Label(self.root, text='Your Student ID:')
+        self.L2 = tk.Label(self.root, text='Modality:')
         # L1.pack(side=tk.LEFT)
         # E1 = tk.Entry(self.root, bd=5)
         # E1.pack(side=tk.RIGHT)
         self.E1 = tk.Entry(self.root, bd=5, textvariable=self.id)
+        self.E2 = tk.Entry(self.root, bd=5, textvariable=self.modality)
         self.E1.bind('<Return>', self.selection_task)
-        self.w.create_window(50, 50, window=self.L1, anchor='center', tags=('id', ))
-        self.w.create_window(200, 50, window=self.E1, anchor='center', tags=('id', ))
+        self.E2.bind('<Return>', self.selection_task)
+
+        self.w.create_window(50, 50, window=self.L1, anchor='center', tags=('id',))
+        self.w.create_window(50, 100, window=self.L2, anchor='center', tags=('id',))
+        self.w.create_window(200, 50, window=self.E1, anchor='center', tags=('id',))
+        self.w.create_window(200, 100, window=self.E2, anchor='center', tags=('id',))
 
     def set_winsize(self, win_size):
         self.winsize = win_size
@@ -144,7 +152,6 @@ class MainApplication(tk.Frame):
                 for pats in self.pats_dict.keys():
                     self.seq.append([case, pats])
             random.shuffle(self.seq)
-            random.shuffle(self.recog_typelist)
 
         if self.task_cnt < len(self.seq):
             # assign n and recognizer type for current task
@@ -155,7 +162,6 @@ class MainApplication(tk.Frame):
             self.posters_selected = random.sample(self.other_posters, self.n - 1) + [self.target_poster]
             random.shuffle(self.posters_selected)
             self.preposters.append(self.posters_selected)
-            self.recog_type = self.recog_typelist[0]
         else:
             nn = len(self.seq)
             if self.task_cnt == nn:
@@ -169,7 +175,15 @@ class MainApplication(tk.Frame):
             self.pats = self.pats_dict[self.pat_type]
             # random.shuffle(self.preposters)
             self.posters_selected = self.seq[self.task_cnt - nn][2]
-            self.recog_type = self.recog_typelist[1]
+        if self.modality == 'thumb':
+            self.recog_type = 'corr'
+            self.reader = ArduinoReader.ArduinoReader(self.stop_event, self.signal)
+        elif self.modality == 'foot':
+            self.recog_type = 'corr'
+            self.reader = impinjReader.ImpinjReader(self.stop_event, self.signal)
+        elif self.modality == 'teeth':
+            self.recog_type = 'baye'
+            self.reader = ArduinoReader.ArduinoReader(self.stop_event, self.signal)
         # print(self.pats, self.seq, len(self.posters_selected))
         self.target = self.posters_selected.index(self.target_poster)
         for pat in self.pats:
@@ -209,11 +223,7 @@ class MainApplication(tk.Frame):
             self.stop_event.clear()
             self.recog = Recognizer(self.stop_event, self.select_event, self.sig_queue, self.pat_queues, self.recog_type,
                                     self.n, self.interval, self.pats_selected, self.model_period, self.model_delay, self.wins, self.THs)
-
             self.recog.start()
-            self.reader = ArduinoReader.ArduinoReader(self.stop_event, self.signal)
-            # self.reader = impinjReader.ImpinjReader(self.stop_event, self.signal)
-
             self.reader.start()
             # draw the posters and dots
             self.display()
@@ -231,7 +241,7 @@ class MainApplication(tk.Frame):
         elif self.n == 9:
             self.draw(3, 3, int(self.height / 30))
         elif self.n == 10:
-            self.draw(2, 5, int(self.width / 20))
+            self.draw(2, 5, int(self.width / 30))
         elif self.n == 15:
             self.draw(3, 5, int(self.height / 30))
         elif self.n == 21:
@@ -309,7 +319,7 @@ class MainApplication(tk.Frame):
         # update the input signal and pattern display status
         # if self.pressed > 0:
         self.signal = self.reader.get_signal()
-        print(self.signal)
+        # print(self.signal)
         self.q_put(self.sig_queue, self.signal)
         for q, state in zip(self.pat_queues, self.pats_status):
             self.q_put(q, state)

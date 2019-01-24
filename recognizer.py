@@ -92,7 +92,7 @@ class Recognizer(threading.Thread):
         if self.algo == 'corr':
             self.recog_corr()
         elif self.algo == 'baye':
-            self.recog_baye()
+            self.recog_baye_emg()
         elif self.algo == 'ml':
             self.recog_ML()
         else:
@@ -129,6 +129,98 @@ class Recognizer(threading.Thread):
             self.select.set()
             self.target = np.argmax(probs)
             print('recog {}, selected {}'.format(self.algo, self.pats[self.target]))
+
+    def recog_baye_emg(self):
+        t_start = time.time()
+        signal = self.sigs_q
+        # signal_raw = self.sigs_q
+        # print(signal_raw)
+        # n_ma = 10
+        # signal = list()
+        # for i in range(self.win_n + 10):
+        #     signal.append(np.mean(signal_raw[-i - n_ma:-i]))
+        # signal = signal - np.nanmean(signal)
+        # print(signal)
+        m_changes = list()
+        i = 0
+        while True:
+            try:
+                if signal[-i] - signal[-(i + 1)] == 1:
+                    if len(m_changes) == 0 or abs(i - m_changes[-1]) > 0.3/self.inteval:
+                        m_changes.append(len(self.sigs_q) - i)
+                    if i > self.win_n:
+                        break
+                i += 1
+            except IndexError:
+                break
+
+        m_changes = m_changes[1:]
+        m_changes.reverse()
+        # print(m_changes)
+        if m_changes == self.mchanges_prev:
+            return
+        self.mchanges_prev = m_changes
+        # m_periods = [(m_changes[i + 1] - m_changes[i] + 1) * self.inteval * 1000 for i in range(len(m_changes) - 1)]
+        # median_period = np.median(m_periods)
+        # calculate delay for each period
+        prob_all = [[] for _ in self.pats_q]
+        # prob_periods = dict()
+        m_periods = list()
+        # pats with different delays for current period
+        for i in range(1, len(m_changes)):
+            # get probability for all periods. The measured period is the time different between the current tap and the previous tap
+            mperiod = int((m_changes[i] - m_changes[i - 1] + 2) * 0.5 * self.inteval * 1000)
+
+            m_periods.append(mperiod)
+            prob_period = dict()
+            for period in self.pats_baye.keys():
+                dpats = self.pats_baye[period]
+                try:
+                    prob_period[period] = self.model_period.loc[int(mperiod - 200), str(period)] * len(dpats)
+                except KeyError:
+                    prob_period[period] = 0
+            # print(prob_period)
+            factor = np.sum([v for k, v in prob_period.items()])
+            # get overall probability with delay
+            for period in self.pats_baye.keys():
+                dpats = self.pats_baye[period]
+                prob_period[period] = prob_period[period] / factor
+                if len(dpats) == 1:
+                    prob_all[dpats[0]].append(prob_period[period])
+                else:
+                    prob_delay = list()
+                    for p in dpats:
+                        pat = self.pats_q[p]
+                        m_delay = self.measure_delay(m_changes[i], pat)
+                        # print(period, m_delay)
+                        # m_d[i].append(m_delay)
+                        try:
+                            # prob_delay.append(self.model_delay.loc[int(m_delay + 400), str(period)])
+                            prob_delay.append(self.model_delay.loc[int(m_delay + 400), str(period)])
+                        except KeyError:
+                            prob_delay.append(0)
+                        # print(prob_temp, period, p)
+                    prob_delay_norm = prob_delay / np.sum(prob_delay)
+                    for j, p in enumerate(dpats):
+                        prob_all[p].append(prob_period[period] * prob_delay_norm[j])
+                # print('period {}, dpats {}, prob_period {},  prob_all {}'.format(period, dpats,
+                #                                                     prob_period[period], prob_all))
+        print('recog thread delta {}, mean {}, median {}'.format(m_periods, np.mean(m_periods), np.median(m_periods)))
+
+        # average for all taps
+        prob_all = [np.mean(x) for x in prob_all]
+        prob_all = prob_all / np.sum(prob_all)
+        # print(prob_all)
+        # prob_all_sorted = np.sort(prob_all)
+        # print(prob_all, prob_all_sorted, np.max(prob_all), np.argmax(prob_all))
+        if np.max(prob_all) > self.TH:
+            # if prob_all_sorted[-1] - prob_all_sorted[-2] > self.TH:
+            self.select.set()
+            self.target = np.argmax(prob_all)
+            # self.target = list(prob_all).index(prob_all_sorted[-1])
+            print('recog {}, selected {}'.format(self.algo, self.pats[self.target]))
+        # print('recog time is {}'.format(time.time() - t_start))
+
 
     def recog_baye(self):
         t_start = time.time()

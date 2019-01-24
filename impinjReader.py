@@ -24,10 +24,13 @@ class ImpinjReader(threading.Thread):
 
     def run(self):
         while not self.stopped.is_set():
-            data = self.s.recv(self.BUFFER_SIZE).decode("utf-8").split(',')
-            # self.dataq.put(data[5])
-            self.signal = float(data[5])
-            print(data)
+            try:
+                data = self.s.recv(self.BUFFER_SIZE).decode("utf-8").split(',')
+                # self.dataq.put(data[5])
+                self.signal = float(data[5])
+            except socket.error:
+                continue
+            # print(data)
             # time.sleep(0.001)
         self.s.close()
 
